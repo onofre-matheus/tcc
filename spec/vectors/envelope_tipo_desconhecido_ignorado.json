@@ -1,0 +1,22 @@
+{
+  "name": "tipos de evento desconhecidos são ignorados sem interromper a projeção (compatibilidade com catálogos futuros)",
+  "projection": "tasks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Revisar TCC" } },
+    { "id": "evt-02", "type": "task.snoozed", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-b",
+      "payload": { "task_id": "t1", "until": "2026-08-01" } },
+    { "id": "evt-03", "type": "task.prioritized", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "priority": "A" } }
+  ],
+  "expected": {
+    "tasks": {
+      "t1": { "title": "Revisar TCC", "priority": "A", "done": false }
+    },
+    "day_list": ["t1"],
+    "alerts": { "too_many_a": false }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "review projeta a semana (seg–dom) do instante now: foco, pausas (inclusive retroativa), motivos de interrupção e agenda",
+  "projection": "review",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "session.started", "v": 1, "lc": 1, "ts": "2026-06-30T12:00:00Z", "device": "dev-a",
+      "payload": { "session_id": "s0", "kind": "task", "planned_minutes": 20 } },
+    { "id": "evt-02", "type": "session.ended", "v": 1, "lc": 2, "ts": "2026-06-30T12:20:00Z", "device": "dev-a",
+      "payload": { "session_id": "s0", "outcome": "completed" } },
+    { "id": "evt-03", "type": "session.started", "v": 1, "lc": 3, "ts": "2026-07-07T13:00:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "kind": "task", "planned_minutes": 25 } },
+    { "id": "evt-04", "type": "session.ended", "v": 1, "lc": 4, "ts": "2026-07-07T13:25:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "outcome": "completed" } },
+    { "id": "evt-05", "type": "card.reviewed", "v": 1, "lc": 5, "ts": "2026-07-07T13:10:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct", "session_id": "s1" } },
+    { "id": "evt-06", "type": "card.reviewed", "v": 1, "lc": 6, "ts": "2026-07-07T13:12:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "result": "wrong", "session_id": "s1" } },
+    { "id": "evt-07", "type": "session.started", "v": 1, "lc": 7, "ts": "2026-07-08T14:00:00Z", "device": "dev-b",
+      "payload": { "session_id": "s2", "kind": "task", "planned_minutes": 25 } },
+    { "id": "evt-08", "type": "session.ended", "v": 2, "lc": 8, "ts": "2026-07-08T14:10:00Z", "device": "dev-b",
+      "payload": { "session_id": "s2", "outcome": "interrupted", "reason": "celular" } },
+    { "id": "evt-09", "type": "pause.started", "v": 1, "lc": 9, "ts": "2026-07-08T14:15:00Z", "device": "dev-b",
+      "payload": { "pause_id": "p1", "planned_minutes": 5 } },
+    { "id": "evt-10", "type": "pause.ended", "v": 1, "lc": 10, "ts": "2026-07-08T14:20:00Z", "device": "dev-b",
+      "payload": { "pause_id": "p1" } },
+    { "id": "evt-11", "type": "pause.logged", "v": 1, "lc": 11, "ts": "2026-07-10T09:00:00Z", "device": "dev-a",
+      "payload": { "pause_id": "p2", "starts_at": "2026-07-09T11:00:00Z", "ends_at": "2026-07-09T11:15:00Z" } },
+    { "id": "evt-12", "type": "appointment.created", "v": 1, "lc": 12, "ts": "2026-07-06T10:00:00Z", "device": "dev-a",
+      "payload": { "appointment_id": "a1", "title": "Estudo TCC", "starts_at": "2026-07-07T14:00:00Z", "ends_at": "2026-07-07T15:00:00Z" } }
+  ],
+  "expected": {
+    "week_start": "2026-07-06",
+    "week_end": "2026-07-12",
+    "days": {
+      "2026-07-06": { "reviews": 0, "focus_minutes": 0, "pause_minutes": 0, "completed": 0, "interrupted": 0 },
+      "2026-07-07": { "reviews": 2, "focus_minutes": 25, "pause_minutes": 0, "completed": 1, "interrupted": 0 },
+      "2026-07-08": { "reviews": 0, "focus_minutes": 10, "pause_minutes": 5, "completed": 0, "interrupted": 1 },
+      "2026-07-09": { "reviews": 0, "focus_minutes": 0, "pause_minutes": 15, "completed": 0, "interrupted": 0 }
+    },
+    "totals": { "reviews": 2, "focus_minutes": 35, "pause_minutes": 20, "completed": 1, "interrupted": 1 },
+    "reasons": { "celular": 1 },
+    "appointment_minutes": 60
+  }
+}

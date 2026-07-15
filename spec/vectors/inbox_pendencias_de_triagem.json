@@ -1,0 +1,31 @@
+{
+  "name": "caixa de entrada lista notas e distrações ainda não triadas, na ordem de captura",
+  "projection": "inbox",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "note.captured", "v": 1, "lc": 1, "ts": "2026-07-08T10:00:00Z", "device": "dev-a",
+      "payload": { "note_id": "n1", "text": "Event sourcing registra fatos, não estado", "url": "https://martinfowler.com/eaaDev/EventSourcing.html", "page_title": "Event Sourcing" } },
+    { "id": "evt-02", "type": "note.captured", "v": 1, "lc": 2, "ts": "2026-07-08T11:00:00Z", "device": "dev-a",
+      "payload": { "note_id": "n2", "text": "CRDTs convergem sem coordenação" } },
+    { "id": "evt-03", "type": "note.captured", "v": 1, "lc": 3, "ts": "2026-07-09T10:00:00Z", "device": "dev-a",
+      "payload": { "note_id": "n3", "text": "Lamport define ordem parcial de eventos" } },
+    { "id": "evt-04", "type": "card.created", "v": 1, "lc": 4, "ts": "2026-07-09T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "O que convergem sem coordenação?", "back": "CRDTs", "tags": [] } },
+    { "id": "evt-05", "type": "note.triaged", "v": 1, "lc": 5, "ts": "2026-07-09T11:00:01Z", "device": "dev-a",
+      "payload": { "note_id": "n2", "action": "to_card", "card_id": "c1" } },
+    { "id": "evt-06", "type": "distraction.captured", "v": 1, "lc": 6, "ts": "2026-07-09T14:00:00Z", "device": "dev-a",
+      "payload": { "distraction_id": "x1", "session_id": "s1", "text": "responder mensagem do grupo" } },
+    { "id": "evt-07", "type": "distraction.captured", "v": 1, "lc": 7, "ts": "2026-07-09T14:10:00Z", "device": "dev-a",
+      "payload": { "distraction_id": "x2", "session_id": "s1", "text": "pesquisar preço do teclado" } },
+    { "id": "evt-08", "type": "distraction.triaged", "v": 1, "lc": 8, "ts": "2026-07-09T14:30:00Z", "device": "dev-a",
+      "payload": { "distraction_id": "x1", "action": "done" } }
+  ],
+  "expected": {
+    "pending_notes": ["n1", "n3"],
+    "pending_distractions": ["x2"],
+    "notes": { "n1": { "text": "Event sourcing registra fatos, não estado", "url": "https://martinfowler.com/eaaDev/EventSourcing.html" } },
+    "distractions": { "x2": { "text": "pesquisar preço do teclado", "session_id": "s1" } }
+  }
+}

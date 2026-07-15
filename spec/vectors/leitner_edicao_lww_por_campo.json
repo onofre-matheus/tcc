@@ -1,0 +1,25 @@
+{
+  "name": "card.edited corrige frente/verso/tags por last-writer-wins sem alterar caixa nem vencimento",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "O que é DNS", "back": "Sistema de nomes", "tags": [] } },
+    { "id": "evt-02", "type": "card.edited", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "O que é o DNS?" } },
+    { "id": "evt-03", "type": "card.edited", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-b",
+      "payload": { "card_id": "c1", "back": "Sistema hierárquico de nomes de domínio" } },
+    { "id": "evt-04", "type": "card.edited", "v": 1, "lc": 4, "ts": "2026-07-01T13:00:00Z", "device": "dev-b",
+      "payload": { "card_id": "c1", "front": "Defina DNS", "tags": ["redes"] } },
+    { "id": "evt-05", "type": "card.edited", "v": 1, "lc": 5, "ts": "2026-07-01T14:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c9", "front": "fantasma" } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": { "front": "Defina DNS", "back": "Sistema hierárquico de nomes de domínio", "tags": ["redes"], "box": 1, "due": "2026-07-01", "archived": false }
+    },
+    "queue": ["c1"]
+  }
+}

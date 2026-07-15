@@ -1,0 +1,26 @@
+{
+  "name": "task.edited aplica last-writer-wins por campo na ordem total; edição de tarefa inexistente é ignorada",
+  "projection": "tasks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Ler capítulo 3" } },
+    { "id": "evt-02", "type": "task.edited", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Ler o capítulo 3 do Sommerville" } },
+    { "id": "evt-03", "type": "task.edited", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-b",
+      "payload": { "task_id": "t1", "due_date": "2026-07-15" } },
+    { "id": "evt-04", "type": "task.edited", "v": 1, "lc": 4, "ts": "2026-07-01T13:00:00Z", "device": "dev-b",
+      "payload": { "task_id": "t1", "title": "Ler os capítulos 3 e 4 do Sommerville" } },
+    { "id": "evt-05", "type": "task.edited", "v": 1, "lc": 5, "ts": "2026-07-01T14:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t9", "title": "fantasma" } }
+  ],
+  "expected": {
+    "tasks": {
+      "t1": { "title": "Ler os capítulos 3 e 4 do Sommerville", "due_date": "2026-07-15", "priority": null, "done": false }
+    },
+    "day_list": ["t1"],
+    "alerts": { "too_many_a": false }
+  }
+}

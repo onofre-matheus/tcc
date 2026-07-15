@@ -1,0 +1,25 @@
+{
+  "name": "acerto na caixa 5 permanece na caixa 5 (revisão mensal perpétua)",
+  "projection": "leitner",
+  "now": "2026-07-01T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-1", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-03-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-2", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-03-02T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-3", "type": "card.reviewed", "v": 1, "lc": 3, "ts": "2026-03-06T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-4", "type": "card.reviewed", "v": 1, "lc": 4, "ts": "2026-03-14T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-5", "type": "card.reviewed", "v": 1, "lc": 5, "ts": "2026-03-30T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-6", "type": "card.reviewed", "v": 1, "lc": 6, "ts": "2026-05-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } }
+  ],
+  "expected": {
+    "cards": { "c1": { "box": 5, "due": "2026-05-31" } },
+    "queue": ["c1"]
+  }
+}

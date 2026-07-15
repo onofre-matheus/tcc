@@ -1,0 +1,41 @@
+{
+  "name": "lista do dia ordena A→B→C, empate por criação; concluídas saem; repriorização vale a última",
+  "projection": "tasks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Ler capítulo 3" } },
+    { "id": "evt-02", "type": "task.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "title": "Enviar e-mail ao orientador" } },
+    { "id": "evt-03", "type": "task.created", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t3", "title": "Organizar mesa" } },
+    { "id": "evt-04", "type": "task.created", "v": 1, "lc": 4, "ts": "2026-07-01T13:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t4", "title": "Revisar TCC" } },
+    { "id": "evt-05", "type": "task.prioritized", "v": 1, "lc": 5, "ts": "2026-07-01T13:05:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "priority": "B" } },
+    { "id": "evt-06", "type": "task.prioritized", "v": 1, "lc": 6, "ts": "2026-07-01T13:06:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "priority": "A" } },
+    { "id": "evt-07", "type": "task.prioritized", "v": 1, "lc": 7, "ts": "2026-07-01T13:07:00Z", "device": "dev-a",
+      "payload": { "task_id": "t4", "priority": "A" } },
+    { "id": "evt-08", "type": "task.created", "v": 1, "lc": 8, "ts": "2026-07-01T14:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t5", "title": "Comprar café" } },
+    { "id": "evt-09", "type": "task.completed", "v": 1, "lc": 9, "ts": "2026-07-01T15:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t3" } },
+    { "id": "evt-10", "type": "task.prioritized", "v": 1, "lc": 10, "ts": "2026-07-01T16:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "priority": "A" } },
+    { "id": "evt-11", "type": "task.created", "v": 1, "lc": 11, "ts": "2026-07-01T17:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t6", "title": "Escrever seção 4.6", "parent_id": "t4" } }
+  ],
+  "expected": {
+    "tasks": {
+      "t1": { "priority": "A", "done": false },
+      "t3": { "done": true },
+      "t5": { "priority": null, "done": false },
+      "t6": { "parent_id": "t4", "priority": null, "done": false }
+    },
+    "day_list": ["t1", "t2", "t4", "t5", "t6"],
+    "alerts": { "too_many_a": false }
+  }
+}

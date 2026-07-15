@@ -1,0 +1,15 @@
+{
+  "name": "cartão novo entra na caixa 1 e vence imediatamente",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-1", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-10T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "O que é o sistema Leitner?", "back": "Caixas com intervalos crescentes", "tags": [] } }
+  ],
+  "expected": {
+    "cards": { "c1": { "box": 1, "due": "2026-07-10" } },
+    "queue": ["c1"]
+  }
+}

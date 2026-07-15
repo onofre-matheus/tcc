@@ -1,0 +1,26 @@
+{
+  "name": "task.deleted remove a tarefa da lista; edição posterior ao tombstone é ignorada",
+  "projection": "tasks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Comprar café" } },
+    { "id": "evt-02", "type": "task.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "title": "Enviar e-mail ao orientador" } },
+    { "id": "evt-03", "type": "task.prioritized", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "priority": "A" } },
+    { "id": "evt-04", "type": "task.deleted", "v": 1, "lc": 4, "ts": "2026-07-01T13:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1" } },
+    { "id": "evt-05", "type": "task.edited", "v": 1, "lc": 5, "ts": "2026-07-01T14:00:00Z", "device": "dev-b",
+      "payload": { "task_id": "t1", "title": "não deve reaparecer" } }
+  ],
+  "expected": {
+    "tasks": {
+      "t2": { "title": "Enviar e-mail ao orientador", "priority": "A", "done": false }
+    },
+    "day_list": ["t2"],
+    "alerts": { "too_many_a": false }
+  }
+}

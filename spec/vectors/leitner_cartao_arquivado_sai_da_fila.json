@@ -1,0 +1,24 @@
+{
+  "name": "card.archived tira o cartão da fila de revisão preservando caixa e histórico",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "deck_id": "d1", "front": "f2", "back": "b2", "tags": [] } },
+    { "id": "evt-03", "type": "card.reviewed", "v": 1, "lc": 3, "ts": "2026-07-02T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-04", "type": "card.archived", "v": 1, "lc": 4, "ts": "2026-07-03T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1" } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": { "box": 2, "due": "2026-07-05", "archived": true },
+      "c2": { "box": 1, "due": "2026-07-01", "archived": false }
+    },
+    "queue": ["c2"]
+  }
+}

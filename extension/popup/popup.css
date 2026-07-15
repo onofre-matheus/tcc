@@ -1,0 +1,56 @@
+body { width: 600px; max-height: 560px; overflow-y: auto; overflow-x: hidden; }
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+/* Sem isto, colunas de grid usam min-width:auto e um título longo sem quebra
+   estica a coluna além do popup — escondendo o botão de concluir e a borda. */
+.grid > .panel { min-width: 0; }
+
+/* Calendário */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* Só a 1ª letra maiúscula: `capitalize` subiria também as preposições
+   ("Agosto De 2026" — errado em português). */
+.cal-head h2 { font-size: 13px; letter-spacing: 0; color: var(--text); }
+.cal-head h2::first-letter { text-transform: uppercase; }
+.cal-dow, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-dow div { text-align: center; font-size: 10px; color: var(--muted); padding: 2px 0; }
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid transparent; background: var(--panel-2);
+  font-size: 12px; position: relative;
+}
+.cal-cell.blank { background: transparent; }
+.cal-cell.selectable { cursor: pointer; }
+.cal-cell.selectable:hover { border-color: var(--accent); }
+.cal-cell.today { font-weight: 700; color: var(--accent); }
+.cal-cell.selected { border-color: var(--accent); background: var(--accent-soft); }
+.cal-cell .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 2px; }
+
+.day-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.day-detail h3 { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.day-detail h3::first-letter { text-transform: uppercase; }
+.appt-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.appt { display: flex; gap: 6px; font-size: 12px; padding: 4px 0; }
+.appt .time { color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Tarefas */
+.task-form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.task-form select { width: auto; flex: 1; }
+
+/* Quebra de tarefas: subtarefas recuam por nível (--depth) sob o pai. */
+#taskList .item { padding-left: calc(4px + var(--depth, 0) * 20px); }
+
+/* Ações secundárias (quebrar/editar/apagar) só no hover ou foco da linha:
+   devolve a largura ao título — concluir (✓) fica sempre visível. */
+#taskList .item .item-actions { display: none; }
+#taskList .item:hover .item-actions,
+#taskList .item:focus-within .item-actions { display: inline-flex; gap: 2px; }
+#taskList .item.sub .title::before { content: "↳ "; color: var(--muted); }
+.subtask-form {
+  padding: 2px 4px 8px calc(4px + var(--depth, 1) * 20px);
+}
+.subtask-form input { width: 100%; }

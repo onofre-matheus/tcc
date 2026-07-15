@@ -1,0 +1,33 @@
+{
+  "name": "mais de 4 tarefas A ativas dispara o alerta (RF03)",
+  "projection": "tasks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Tarefa 1" } },
+    { "id": "evt-02", "type": "task.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "title": "Tarefa 2" } },
+    { "id": "evt-03", "type": "task.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "task_id": "t3", "title": "Tarefa 3" } },
+    { "id": "evt-04", "type": "task.created", "v": 1, "lc": 4, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "task_id": "t4", "title": "Tarefa 4" } },
+    { "id": "evt-05", "type": "task.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:04:00Z", "device": "dev-a",
+      "payload": { "task_id": "t5", "title": "Tarefa 5" } },
+    { "id": "evt-06", "type": "task.prioritized", "v": 1, "lc": 6, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "priority": "A" } },
+    { "id": "evt-07", "type": "task.prioritized", "v": 1, "lc": 7, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "priority": "A" } },
+    { "id": "evt-08", "type": "task.prioritized", "v": 1, "lc": 8, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "task_id": "t3", "priority": "A" } },
+    { "id": "evt-09", "type": "task.prioritized", "v": 1, "lc": 9, "ts": "2026-07-01T11:03:00Z", "device": "dev-a",
+      "payload": { "task_id": "t4", "priority": "A" } },
+    { "id": "evt-10", "type": "task.prioritized", "v": 1, "lc": 10, "ts": "2026-07-01T11:04:00Z", "device": "dev-a",
+      "payload": { "task_id": "t5", "priority": "A" } }
+  ],
+  "expected": {
+    "day_list": ["t1", "t2", "t3", "t4", "t5"],
+    "alerts": { "too_many_a": true }
+  }
+}

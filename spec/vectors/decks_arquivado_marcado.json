@@ -1,0 +1,21 @@
+{
+  "name": "deck.archived marca o deck como arquivado preservando nome e tags",
+  "projection": "decks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Cálculo 1", "tags": ["p1"] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "Cálculo 3", "tags": [] } },
+    { "id": "evt-03", "type": "deck.archived", "v": 1, "lc": 3, "ts": "2026-07-02T10:00:00Z", "device": "dev-b",
+      "payload": { "deck_id": "d1" } }
+  ],
+  "expected": {
+    "decks": {
+      "d1": { "name": "Cálculo 1", "tags": ["p1"], "archived": true },
+      "d2": { "name": "Cálculo 3", "tags": [], "archived": false }
+    }
+  }
+}

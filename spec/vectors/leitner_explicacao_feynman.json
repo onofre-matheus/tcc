@@ -1,0 +1,25 @@
+{
+  "name": "explicações Feynman: a projeção expõe a última explicação e a contagem",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-08T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "O que é o relógio de Lamport?", "back": "Um contador lógico que ordena eventos", "tags": [] } },
+    { "id": "evt-02", "type": "card.explained", "v": 1, "lc": 2, "ts": "2026-07-08T10:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "text": "É tipo um número que sempre sobe quando algo acontece", "session_id": "s1" } },
+    { "id": "evt-03", "type": "card.explained", "v": 1, "lc": 3, "ts": "2026-07-09T10:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "text": "Um contador por dispositivo que cresce a cada evento e no recebimento vira o máximo visto", "session_id": "s2" } },
+    { "id": "evt-04", "type": "card.explained", "v": 1, "lc": 4, "ts": "2026-07-09T10:06:00Z", "device": "dev-a",
+      "payload": { "card_id": "cX", "text": "explicação de cartão inexistente é ignorada" } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": {
+        "last_explanation": "Um contador por dispositivo que cresce a cada evento e no recebimento vira o máximo visto",
+        "explanation_count": 2
+      }
+    }
+  }
+}

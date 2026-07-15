@@ -1,0 +1,19 @@
+{
+  "name": "evento com id duplicado é ignorado (idempotência)",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-1", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-2", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-07-05T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-2", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-07-05T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } }
+  ],
+  "expected": {
+    "cards": { "c1": { "box": 2, "due": "2026-07-08" } },
+    "queue": ["c1"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "fila ordenada por caixa mais frágil, depois vencimento, depois criação",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-1", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-06-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "a", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-2", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-06-01T13:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "b", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-3", "type": "card.created", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-4", "type": "card.reviewed", "v": 1, "lc": 4, "ts": "2026-06-02T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "a", "result": "wrong" } },
+    { "id": "evt-5", "type": "card.reviewed", "v": 1, "lc": 5, "ts": "2026-06-05T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "b", "result": "correct" } }
+  ],
+  "expected": {
+    "cards": {
+      "a": { "box": 1, "due": "2026-06-03" },
+      "b": { "box": 2, "due": "2026-06-08" },
+      "c": { "box": 1, "due": "2026-07-01" }
+    },
+    "queue": ["a", "c", "b"]
+  }
+}

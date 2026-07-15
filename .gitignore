@@ -1,0 +1,38 @@
+# Dependências
+node_modules/
+
+# Segredos e notas locais
+.env
+.notes/
+
+
+# Legado (fora do escopo do TCC atual, mantido apenas no disco)
+backend/
+google_extencion/
+tmp/
+
+# Binários do CLI Go
+cli/pnn
+cli/dn
+cli/desiste
+
+# Artefatos de build do LaTeX (mantém apenas o fonte e o main.pdf)
+latex/*.aux
+latex/*.bbl
+latex/*.blg
+latex/*.brf
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.idx
+latex/*.ilg
+latex/*.ind
+latex/*.lof
+latex/*.log
+latex/*.lot
+latex/*.out
+latex/*.synctex.gz
+latex/*.toc
+latex/image.png
+
+# Sistema operacional
+.DS_Store

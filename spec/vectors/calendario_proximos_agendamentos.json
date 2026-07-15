@@ -1,0 +1,23 @@
+{
+  "name": "calendário lista próximos agendamentos por horário; encerrados saem; em andamento permanece",
+  "projection": "calendar",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "appointment.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "appointment_id": "a1", "title": "Orientação (passada)", "starts_at": "2026-07-09T10:00:00Z", "ends_at": "2026-07-09T11:00:00Z" } },
+    { "id": "evt-02", "type": "appointment.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:05:00Z", "device": "dev-a",
+      "payload": { "appointment_id": "a2", "title": "Aula de Redes", "starts_at": "2026-07-10T14:00:00Z", "ends_at": "2026-07-10T16:00:00Z" } },
+    { "id": "evt-03", "type": "appointment.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:10:00Z", "device": "dev-a",
+      "payload": { "appointment_id": "a3", "title": "Entrega do TCC", "starts_at": "2026-07-11T09:00:00Z", "ends_at": "2026-07-11T10:00:00Z" } },
+    { "id": "evt-04", "type": "appointment.created", "v": 1, "lc": 4, "ts": "2026-07-01T10:15:00Z", "device": "dev-a",
+      "payload": { "appointment_id": "a4", "title": "Reunião em andamento", "starts_at": "2026-07-10T11:30:00Z", "ends_at": "2026-07-10T12:30:00Z" } }
+  ],
+  "expected": {
+    "appointments": {
+      "a2": { "title": "Aula de Redes", "starts_at": "2026-07-10T14:00:00Z", "ends_at": "2026-07-10T16:00:00Z" }
+    },
+    "upcoming": ["a4", "a2", "a3"]
+  }
+}

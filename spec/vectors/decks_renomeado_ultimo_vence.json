@@ -1,0 +1,22 @@
+{
+  "name": "deck.renamed aplica last-writer-wins ao nome; renomear deck inexistente é ignorado",
+  "projection": "decks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Redes", "tags": ["p2"] } },
+    { "id": "evt-02", "type": "deck.renamed", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-b",
+      "payload": { "deck_id": "d1", "name": "Redes de Computadores" } },
+    { "id": "evt-03", "type": "deck.renamed", "v": 1, "lc": 3, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Redes de Computadores II" } },
+    { "id": "evt-04", "type": "deck.renamed", "v": 1, "lc": 4, "ts": "2026-07-01T13:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d9", "name": "fantasma" } }
+  ],
+  "expected": {
+    "decks": {
+      "d1": { "name": "Redes de Computadores II", "tags": ["p2"], "archived": false }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "andaimes de explicação: frame (v2) escolhe o método; last_frame expõe o último, ausente ≡ feynman",
+  "projection": "leitner",
+  "now": "2026-07-12T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-08T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "O que é fotossíntese?", "back": "Conversão de luz em glicose", "tags": [] } },
+    { "id": "evt-02", "type": "card.explained", "v": 1, "lc": 2, "ts": "2026-07-08T10:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "text": "planta pega luz e faz comida", "session_id": "s1" } },
+    { "id": "evt-03", "type": "card.explained", "v": 2, "lc": 3, "ts": "2026-07-09T10:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "frame": "4causas", "text": "material: luz, água, CO2\nformal: reação que converte luz em energia\neficiente: cloroplastos e luz solar\nfinal: produzir glicose para a planta", "session_id": "s2" } },
+    { "id": "evt-04", "type": "card.created", "v": 1, "lc": 4, "ts": "2026-07-08T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "deck_id": "d1", "front": "O que é o relógio de Lamport?", "back": "Contador lógico que ordena eventos", "tags": [] } },
+    { "id": "evt-05", "type": "card.explained", "v": 1, "lc": 5, "ts": "2026-07-09T11:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "text": "um número que sempre sobe", "session_id": "s3" } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": {
+        "last_explanation": "material: luz, água, CO2\nformal: reação que converte luz em energia\neficiente: cloroplastos e luz solar\nfinal: produzir glicose para a planta",
+        "explanation_count": 2,
+        "last_frame": "4causas"
+      },
+      "c2": {
+        "last_explanation": "um número que sempre sobe",
+        "explanation_count": 1,
+        "last_frame": "feynman"
+      }
+    }
+  }
+}

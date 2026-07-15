@@ -1,0 +1,55 @@
+body { min-width: 300px; }
+main { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 16px; }
+
+.timer {
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+/* Cartão de revisão */
+.card-face {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 14px;
+  min-height: 70px;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  font-size: 15px;
+  margin: 8px 0;
+}
+.card-deck { margin-bottom: 2px; }
+.card-src { margin-top: 6px; }
+.card-src a { color: var(--accent); text-decoration: none; }
+#reviewProgress { margin-top: 8px; text-align: right; }
+
+.feynman-label { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 4px; }
+#feynman { resize: vertical; margin-bottom: 8px; }
+.prev-explanation {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.prev-explanation summary { cursor: pointer; color: var(--muted); }
+.prev-explanation p { margin: 6px 0 0; color: var(--text); }
+
+.deck { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.deck .grow { flex: 1; }
+.deck .count { color: var(--muted); font-size: 11px; }
+/* Hierarquia de decks (::): sub-decks recuam por nível; pai implícito (sem
+   deck.created próprio) fica esmaecido, pois não recebe cartões diretamente. */
+.deck { padding-left: calc(var(--depth, 0) * 16px); }
+.deck.implicit .grow { color: var(--muted); }
+
+.inbox-item { padding: 7px 0; border-bottom: 1px solid var(--border); }
+.inbox-item:last-child { border-bottom: 0; }
+.inbox-item .text { margin-bottom: 4px; }
+.inbox-item .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.inbox-item .kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }

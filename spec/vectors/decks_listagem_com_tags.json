@@ -1,0 +1,19 @@
+{
+  "name": "decks listados com nome e tags",
+  "projection": "decks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Redes de Computadores", "tags": ["redes", "p2"] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "Cálculo 3", "tags": [] } }
+  ],
+  "expected": {
+    "decks": {
+      "d1": { "name": "Redes de Computadores", "tags": ["redes", "p2"] },
+      "d2": { "name": "Cálculo 3", "tags": [] }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Procrastina Não",
+  "version": "0.1.0",
+  "description": "Assistente de consistência nos estudos: calendário, tarefas A/B/C, flashcards (Leitner) e captura rápida — tudo local, com sincronização.",
+  "permissions": ["storage", "contextMenus", "sidePanel", "alarms", "notifications"],
+  "icons": { "128": "icons/icon128.png" },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Calendário e tarefas",
+    "default_popup": "popup/popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  }
+}

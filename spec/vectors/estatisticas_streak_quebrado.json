@@ -1,0 +1,18 @@
+{
+  "name": "dia sem estudo quebra o streak; ontem ativo mantém streak de 1",
+  "projection": "stats",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "card.reviewed", "v": 1, "lc": 1, "ts": "2026-07-05T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-02", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-07-06T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-03", "type": "session.started", "v": 1, "lc": 3, "ts": "2026-07-09T12:00:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "kind": "review", "target_id": "d1", "planned_minutes": 25 } },
+    { "id": "evt-04", "type": "session.ended", "v": 1, "lc": 4, "ts": "2026-07-09T12:25:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "outcome": "completed" } }
+  ],
+  "expected": { "days_studied": 3, "streak": 1, "reviews_today": 0 }
+}

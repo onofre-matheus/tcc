@@ -1,0 +1,16 @@
+{
+  "name": "streak conta dias locais consecutivos de estudo terminando hoje",
+  "projection": "stats",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "card.reviewed", "v": 1, "lc": 1, "ts": "2026-07-08T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-02", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-07-09T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-03", "type": "card.reviewed", "v": 1, "lc": 3, "ts": "2026-07-10T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "wrong" } }
+  ],
+  "expected": { "days_studied": 3, "streak": 3, "reviews_today": 1 }
+}

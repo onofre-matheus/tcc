@@ -1,0 +1,18 @@
+{
+  "name": "menos de 3 sessões concluídas usa o default de 25 minutos",
+  "projection": "attention",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-1", "type": "session.started", "v": 1, "lc": 1, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "kind": "review", "target_id": "d1", "planned_minutes": 25 } },
+    { "id": "evt-2", "type": "session.ended", "v": 1, "lc": 2, "ts": "2026-07-01T12:20:00Z", "device": "dev-a",
+      "payload": { "session_id": "s1", "outcome": "completed" } },
+    { "id": "evt-3", "type": "session.started", "v": 1, "lc": 3, "ts": "2026-07-02T12:00:00Z", "device": "dev-a",
+      "payload": { "session_id": "s2", "kind": "review", "target_id": "d1", "planned_minutes": 25 } },
+    { "id": "evt-4", "type": "session.ended", "v": 1, "lc": 4, "ts": "2026-07-02T12:30:00Z", "device": "dev-a",
+      "payload": { "session_id": "s2", "outcome": "completed" } }
+  ],
+  "expected": { "attention_seconds": 1500 }
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Procrastina Não</title>
+    <link rel="stylesheet" href="../ui/app.css" />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="brand" id="brand">
+      <div>
+        <h1>Procrastina Não</h1>
+        <div class="sub" id="streak">—</div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Sessão de foco / pomodoro -->
+      <section class="panel" id="focusPanel">
+        <h2>Sessão de foco</h2>
+        <div id="focusIdle">
+          <div class="row">
+            <input id="minutes" type="number" min="1" max="120" aria-label="Minutos" />
+            <span class="pill" id="suggestion">—</span>
+          </div>
+          <select id="focusTask" aria-label="Tarefa da sessão" style="margin-top: 8px" title="Em qual tarefa você vai focar? O check-in pergunta por ela pelo nome.">
+            <option value="">(sem tarefa específica)</option>
+          </select>
+          <div class="row" style="margin-top: 8px">
+            <input id="checkinEvery" type="number" min="1" max="60" placeholder="—" aria-label="Check-in a cada quantos minutos" style="max-width: 64px" />
+            <span class="meta grow">check-in “na tarefa?” a cada N min (vazio = sem)</span>
+          </div>
+          <div class="row" style="margin-top: 8px">
+            <button class="btn" id="startFocus">Iniciar foco</button>
+            <button class="btn primary" id="startReview">Revisar flashcards</button>
+          </div>
+        </div>
+        <div id="focusActive" hidden>
+          <div class="timer" id="timer">25:00</div>
+          <div class="meta" id="sessionKind"></div>
+          <div class="row" style="margin-top: 8px">
+            <input id="distraction" placeholder="Surgiu uma distração? Anote e siga." />
+            <button class="btn sm" id="captureDistraction">Anotar</button>
+          </div>
+          <button class="btn ghost sm" id="endFocus" style="margin-top: 8px">Encerrar sessão</button>
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <select id="pauseMin" aria-label="Duração da pausa">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+          </select>
+          <button class="btn ghost sm" id="pauseBtn" title="Pausa cronometrada (Safren: pausa tem duração definida). Durante o foco, encerra a sessão.">☕ Pausa</button>
+        </div>
+      </section>
+
+      <!-- Revisão Leitner -->
+      <section class="panel" id="reviewPanel" hidden>
+        <h2>Revisão</h2>
+        <div id="reviewEmpty" class="empty" hidden>Fila vazia. Bom trabalho! 🐘</div>
+        <div id="card" hidden>
+          <div class="card-deck meta" id="cardDeck"></div>
+          <div class="card-face" id="cardFace"></div>
+          <div class="card-src meta" id="cardSrc"></div>
+          <details class="prev-explanation" id="prevExplanation" hidden>
+            <summary>Sua explicação anterior</summary>
+            <p id="prevExplanationText"></p>
+          </details>
+          <div class="row" id="frameSel" style="margin-bottom: 6px" role="group" aria-label="Método de explicação">
+            <button type="button" class="btn ghost sm" data-frame="feynman" title="Explicar com as próprias palavras">Feynman</button>
+            <button type="button" class="btn ghost sm" data-frame="4causas" title="Enquadrar nas 4 causas: material, formal, eficiente, final">4 causas</button>
+          </div>
+          <div id="feynmanBox">
+            <label class="feynman-label" for="feynman">Explique com suas palavras, como se ensinasse alguém:</label>
+            <textarea id="feynman" rows="3" placeholder="Antes de ver a resposta, tente explicar…"></textarea>
+          </div>
+          <div id="causesBox" hidden style="display: flex; flex-direction: column; gap: 6px">
+            <input class="cause" data-key="material" placeholder="Material — do que é feito? quais os componentes?" />
+            <input class="cause" data-key="formal" placeholder="Formal — qual a forma, estrutura ou definição?" />
+            <input class="cause" data-key="eficiente" placeholder="Eficiente — o que o causa / de onde vem?" />
+            <input class="cause" data-key="final" placeholder="Final — para que serve? qual o propósito?" />
+          </div>
+          <button class="btn" id="reveal">Mostrar resposta</button>
+          <div class="row" id="grade" hidden style="margin-top: 8px">
+            <button class="btn" id="wrong">Errei</button>
+            <button class="btn primary" id="correct">Acertei</button>
+          </div>
+          <div class="row" id="cardMaint" style="margin-top: 4px">
+            <button class="btn ghost sm" id="editCard" title="Corrigir frente/verso">✎ corrigir</button>
+            <button class="btn ghost sm" id="archiveCardBtn" title="Tirar da fila preservando o histórico">🗄 arquivar</button>
+          </div>
+        </div>
+        <div class="meta" id="reviewProgress"></div>
+      </section>
+
+      <!-- Caixa de entrada -->
+      <section class="panel">
+        <h2>Caixa de entrada</h2>
+        <form id="noteForm" class="row" style="margin-bottom: 10px">
+          <input id="noteText" placeholder="Anotação rápida" required />
+          <button class="btn sm" type="submit">+</button>
+        </form>
+        <div id="inbox"></div>
+      </section>
+
+      <!-- Retrospectiva semanal -->
+      <section class="panel">
+        <h2>Semana</h2>
+        <div class="row" style="margin-bottom: 8px">
+          <button class="btn ghost sm" id="weekPrev" title="Semana anterior">←</button>
+          <span class="grow" id="weekLabel" style="text-align: center"></span>
+          <button class="btn ghost sm" id="weekNext" title="Semana seguinte">→</button>
+        </div>
+        <div id="weekBody"></div>
+      </section>
+
+      <!-- Decks -->
+      <section class="panel">
+        <h2>Decks</h2>
+        <div id="decks"></div>
+        <form id="deckForm" class="row" style="margin-top: 8px">
+          <input id="deckName" placeholder="Novo deck (use :: para sub-deck)" required />
+          <button class="btn sm" type="submit">+</button>
+        </form>
+        <form id="cardForm" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px">
+          <select id="cardDeckSel" aria-label="Deck do cartão"></select>
+          <input id="cardFront" placeholder="Frente (pergunta)" required />
+          <input id="cardBack" placeholder="Verso (resposta)" required />
+          <input id="cardSource" type="url" placeholder="Fonte (URL) — opcional" />
+          <button class="btn sm" type="submit">Adicionar cartão</button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="debug-bar" id="debugBar"></footer>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

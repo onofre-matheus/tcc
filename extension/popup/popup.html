@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Procrastina Não — Agenda</title>
+    <link rel="stylesheet" href="../ui/app.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="brand" id="brand">
+      <div>
+        <h1>Procrastina Não</h1>
+        <div class="sub" id="streak">—</div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel" id="calPanel">
+        <div class="cal-head">
+          <button class="btn ghost sm" id="prevMonth" aria-label="Mês anterior">‹</button>
+          <h2 id="calTitle">—</h2>
+          <button class="btn ghost sm" id="nextMonth" aria-label="Próximo mês">›</button>
+        </div>
+        <div class="cal-dow" id="calDow"></div>
+        <div class="cal-grid" id="calGrid"></div>
+
+        <div class="day-detail">
+          <h3 id="dayLabel">—</h3>
+          <div id="dayAppointments"></div>
+          <form class="appt-form" id="apptForm">
+            <input id="apptTitle" placeholder="Novo compromisso" required />
+            <div class="row">
+              <input id="apptStart" type="time" required aria-label="Início" />
+              <input id="apptEnd" type="time" required aria-label="Fim" />
+              <button class="btn primary sm" type="submit">+</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="taskPanel">
+        <h2>Lista do dia</h2>
+        <div id="taskAlert"></div>
+        <form class="task-form" id="taskForm">
+          <input id="taskTitle" placeholder="Nova tarefa" required />
+          <div class="row">
+            <select id="taskPri" aria-label="Prioridade">
+              <option value="">Sem prioridade</option>
+              <option value="A">A — urgente</option>
+              <option value="B">B — importante</option>
+              <option value="C">C — pode esperar</option>
+            </select>
+            <button class="btn primary sm" type="submit">Adicionar</button>
+          </div>
+        </form>
+        <div id="taskList"></div>
+      </section>
+    </main>
+
+    <footer class="debug-bar" id="debugBar"></footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
