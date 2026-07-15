@@ -18,18 +18,10 @@ uma **extensão de navegador** e uma **CLI em Go** (`pnn`).
 | `cli/` | CLI em Go `pnn` (alias `procrastina`) — ver [`cli/README.md`](cli/README.md) |
 | `extension/` | Extensão de navegador (Manifest V3): popup, side panel e o mesmo core do log de eventos |
 | `spec/` | Especificação compartilhada: [`SPEC.md`](spec/SPEC.md) (modelo de eventos), [`CLI.md`](spec/CLI.md) e os vetores de conformidade (`vectors/`) |
-| `docs/` | Notas de arquitetura e fundamentação usadas na redação da monografia |
 | `scripts/` | Utilitários de apoio (ex.: `seed-demo.sh`) |
 
 O `core/` da CLI (Go) e o da extensão (JS) implementam **o mesmo contrato** e são
 validados pelo mesmo corpus de vetores em `spec/vectors/`.
-
-## Como compilar a monografia
-
-```bash
-cd latex
-latexmk -pdf main.tex   # gera main.pdf (requer uma distribuição TeX)
-```
 
 ## Como rodar a CLI
 
