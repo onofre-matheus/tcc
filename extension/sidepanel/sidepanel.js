@@ -18,6 +18,13 @@ let dayTasks = { tasks: {}, day_list: [] }; // para o seletor de tarefa do foco
 const CHECKIN_ALARM = "pnn-checkin";
 const CHECKIN_KEY = "active_checkin";
 
+// Fim do foco: o mesmo padrão do check-in. O alarme dispara no service worker
+// (funciona com o painel fechado); active_focus diz qual sessão encerrar e
+// quando. É o service worker quem grava o session.ended e notifica no fim —
+// o painel, aberto, só espelha o encerramento.
+const FOCUS_END_ALARM = "pnn-focus-end";
+const FOCUS_KEY = "active_focus";
+
 async function armCheckin(sessionId, everyMinutes, taskTitle, endMs) {
   if (!everyMinutes || !chrome.alarms) return;
   await chrome.storage.local.set({
@@ -32,6 +39,19 @@ async function disarmCheckin() {
   if (!chrome.alarms) return;
   chrome.alarms.clear(CHECKIN_ALARM);
   await chrome.storage.local.remove(CHECKIN_KEY);
+}
+
+async function armFocusEnd(sessionId, kind, taskTitle, endMs) {
+  if (!chrome.alarms) return;
+  await chrome.storage.local.set({
+    [FOCUS_KEY]: { session_id: sessionId, kind, title: taskTitle ?? "", end_ms: endMs },
+  });
+  chrome.alarms.create(FOCUS_END_ALARM, { when: endMs });
+}
+async function disarmFocusEnd() {
+  if (!chrome.alarms) return;
+  chrome.alarms.clear(FOCUS_END_ALARM);
+  await chrome.storage.local.remove(FOCUS_KEY);
 }
 
 // ---------- Sessão de foco / pomodoro ----------
@@ -58,7 +78,7 @@ function paintTimer(ms) {
 function tick() {
   const left = session.endMs - Date.now();
   paintTimer(left);
-  if (left <= 0) finish("completed");
+  if (left <= 0) completeLocally();
 }
 async function beginSession(kind, label) {
   const minutes = Math.max(1, Number($("minutes").value) || 25);
@@ -73,7 +93,24 @@ async function beginSession(kind, label) {
   showActive(taskTitle ? `${label} · ${taskTitle}` : label);
   session.interval = setInterval(tick, 1000);
   await armCheckin(id, checkinEvery, taskTitle, endMs);
+  await armFocusEnd(id, kind, taskTitle, endMs);
 }
+
+// Fim natural (tempo esgotado): quem grava o session.ended e notifica é o
+// service worker (alarme pnn-focus-end) — assim funciona com o painel fechado.
+// O painel, se aberto, apenas zera a UI e deixa o registro para o alarme, sem
+// gravar em duplicidade. Não desarma o alarme de fim: é ele que vai notificar.
+function completeLocally() {
+  if (!session) return;
+  clearInterval(session.interval);
+  session = null;
+  review = null;
+  showIdle();
+  disarmCheckin();
+}
+
+// Encerramento antecipado (botão "Encerrar sessão" ou pausa): aqui é o painel
+// quem grava, e desarma o alarme de fim para não disparar um "concluído" falso.
 async function finish(outcome, reason) {
   if (!session) return;
   clearInterval(session.interval);
@@ -82,7 +119,22 @@ async function finish(outcome, reason) {
   review = null;
   showIdle();
   await disarmCheckin();
+  await disarmFocusEnd();
   await store.endSession(id, outcome, reason);
+}
+
+// Painel reaberto no meio de uma sessão de foco: o alarme segue armado no
+// service worker, então retomamos a contagem visual para não parecer parado.
+// A revisão não é restaurada (a fila de cartões vive só em memória); mesmo
+// assim o alarme registra e notifica o fim normalmente.
+async function restoreActiveSession() {
+  if (session || !chrome.storage?.local) return;
+  const { [FOCUS_KEY]: focus } = await chrome.storage.local.get(FOCUS_KEY);
+  if (!focus || focus.kind === "review" || Date.now() >= focus.end_ms) return;
+  session = { id: focus.session_id, kind: focus.kind, endMs: focus.end_ms, interval: null };
+  paintTimer(focus.end_ms - Date.now());
+  showActive(focus.title ? `Foco · ${focus.title}` : "Foco");
+  session.interval = setInterval(tick, 1000);
 }
 
 // Interromper pergunta o motivo (opcional): a interrupção vira dado revisável
@@ -530,4 +582,4 @@ async function refresh() {
 
 store.onChange(refresh);
 mountDebugBar(document.getElementById("debugBar"));
-store.ready.then(refresh);
+store.ready.then(refresh).then(restoreActiveSession);
