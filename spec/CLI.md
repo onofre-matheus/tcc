@@ -104,8 +104,8 @@ arquivado.
 
 | Comando | Evento(s) |
 |---|---|
-| `pnn n "texto"` | `note.captured` |
-| `pnn caixa` | — (inbox) |
+| `pnn n "texto" [--link URL]` | `note.captured` (com `url` se `--link`) |
+| `pnn caixa` | — (inbox; nota com link vira hyperlink OSC 8 clicável) |
 | `pnn triagem` | `note.triaged` / `distraction.triaged` (+ `card.created` / `task.created`) |
 
 `pnn triagem` é interativa, **um item por vez**: `[c]artão` (escolhe deck na

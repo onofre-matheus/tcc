@@ -44,9 +44,18 @@ func newCaixaCmd(a *app.App) *cobra.Command {
 			}
 			for _, id := range state.PendingNotes {
 				note := state.Notes[id]
-				fmt.Fprintf(a.Out, " • %s", note.Text)
+				text := note.Text
+				if note.URL != nil {
+					// Com cor, a nota vira link clicável (OSC 8); sem cor, mostro a
+					// URL à parte para continuar copiável no terminal.
+					text = th.Link(*note.URL, "🔗 "+note.Text)
+				}
+				fmt.Fprintf(a.Out, " • %s", text)
 				if note.PageTitle != nil {
 					fmt.Fprintf(a.Out, " %s", th.Dim("("+*note.PageTitle+")"))
+				}
+				if note.URL != nil && !a.Color {
+					fmt.Fprintf(a.Out, " %s", th.Dim("<"+*note.URL+">"))
 				}
 				fmt.Fprintln(a.Out)
 			}

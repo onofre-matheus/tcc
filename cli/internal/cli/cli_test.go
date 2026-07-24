@@ -105,6 +105,34 @@ func TestCompromissoEmHorarioLocal(t *testing.T) {
 	}
 }
 
+func TestNotaComLinkNormalizaEExibeNaCaixa(t *testing.T) {
+	a, _ := newTestApp(t)
+	run(t, a, "n", "corrigir o PR do sync", "--link", "github.com/onofre-matheus/tcc/pull/1")
+
+	var payload struct {
+		Text string `json:"text"`
+		URL  string `json:"url"`
+	}
+	events, err := a.Store.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(events[0].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	// Sem esquema → assume https:// (mesma regra do campo de link da extensão).
+	if payload.URL != "https://github.com/onofre-matheus/tcc/pull/1" {
+		t.Fatalf("url = %q", payload.URL)
+	}
+
+	// Sem cor (buffer de teste), a caixa mostra a URL à parte, para ser copiável.
+	out := run(t, a, "caixa")
+	if !strings.Contains(out, "corrigir o PR do sync") ||
+		!strings.Contains(out, "<https://github.com/onofre-matheus/tcc/pull/1>") {
+		t.Fatalf("`pnn caixa` deveria mostrar a nota com o link: %s", out)
+	}
+}
+
 func TestCompromissoImportanteMarcaEExibeNaAgenda(t *testing.T) {
 	a, _ := newTestApp(t)
 	out := run(t, a, "c", "Defesa do TCC", "15:00-17:00", "--dia", "2026-07-15", "--importante")

@@ -53,3 +53,8 @@ main { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 16px; }
 .inbox-item .text { margin-bottom: 4px; }
 .inbox-item .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .inbox-item .kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+/* Botão "abrir" é um <a> para navegar nativo em nova aba — tira o sublinhado. */
+.inbox-item .actions a.btn { text-decoration: none; }
+
+/* Campo de link opcional da anotação: largura cheia abaixo do texto. */
+.note-url { width: 100%; margin-top: 6px; font-size: 12px; }

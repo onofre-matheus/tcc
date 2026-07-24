@@ -99,9 +99,12 @@
       <!-- Caixa de entrada -->
       <section class="panel">
         <h2>Caixa de entrada</h2>
-        <form id="noteForm" class="row" style="margin-bottom: 10px">
-          <input id="noteText" placeholder="Anotação rápida" required />
-          <button class="btn sm" type="submit">+</button>
+        <form id="noteForm" style="margin-bottom: 10px">
+          <div class="row">
+            <input id="noteText" placeholder="Anotação rápida" required />
+            <button class="btn sm" type="submit">+</button>
+          </div>
+          <input id="noteUrl" class="note-url" inputmode="url" placeholder="🔗 Link (opcional)" aria-label="Link opcional da anotação" />
         </form>
         <div id="inbox"></div>
       </section>

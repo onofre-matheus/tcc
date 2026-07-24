@@ -71,22 +71,44 @@ func newTCmd(a *app.App) *cobra.Command {
 }
 
 func newNCmd(a *app.App) *cobra.Command {
-	return &cobra.Command{
+	var link string
+	cmd := &cobra.Command{
 		Use:   `n "texto"`,
 		Short: "captura uma nota para triagem (note.captured)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if _, err := a.Store.Append("note.captured", map[string]any{
-				"note_id": store.UUIDv7(), "text": args[0],
-			}); err != nil {
+			payload := map[string]any{"note_id": store.UUIDv7(), "text": args[0]}
+			// --link anexa uma URL à nota (o mesmo campo `url` que a captura na
+			// web preenche): vira link clicável no `pnn caixa` e na triagem.
+			if link != "" {
+				payload["url"] = normalizeLink(link)
+			}
+			if _, err := a.Store.Append("note.captured", payload); err != nil {
 				return err
 			}
 			th := ui.Theme{On: a.Color}
-			fmt.Fprintf(a.Out, "✔ anotado — triagem depois com %s\n", th.Blue("pnn triagem"))
+			suffix := ""
+			if link != "" {
+				suffix = " " + th.Dim("🔗")
+			}
+			fmt.Fprintf(a.Out, "✔ anotado%s — triagem depois com %s\n", suffix, th.Blue("pnn triagem"))
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&link, "link", "", "anexa um link à anotação (clicável no `pnn caixa`)")
+	return cmd
 }
+
+// normalizeLink assume https:// quando o usuário digita sem esquema, para o
+// link ser clicável — igual ao campo de link da extensão.
+func normalizeLink(raw string) string {
+	if schemePattern.MatchString(raw) {
+		return raw
+	}
+	return "https://" + raw
+}
+
+var schemePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 
 var timeRangePattern = regexp.MustCompile(`^(\d{2}:\d{2})-(\d{2}:\d{2})$`)
 

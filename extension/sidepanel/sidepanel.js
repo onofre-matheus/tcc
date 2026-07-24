@@ -338,11 +338,17 @@ function renderInbox(inb) {
   const box = $("inbox");
   const notes = inb.pending_notes.map((id) => {
     const n = inb.notes[id];
-    const src = n.url ? ` <span class="tag">🔗</span>` : "";
+    const hasLink = isHttpUrl(n.url);
+    // Link acionável: abre em nova aba (o que você pediu). Só http(s), com o
+    // href escapado, para o campo livre não virar vetor de href malicioso.
+    const open = hasLink
+      ? `<a class="btn ghost sm" href="${esc(n.url).replace(/"/g, "%22")}" target="_blank" rel="noopener noreferrer" title="Abrir em nova aba">🔗 abrir</a>`
+      : "";
     return `<div class="inbox-item">
-      <div class="kind">nota${src ? " · com fonte" : ""}</div>
-      <div class="text">${esc(n.text)}${src}</div>
+      <div class="kind">nota${hasLink ? " · com link" : ""}</div>
+      <div class="text">${esc(n.text)}</div>
       <div class="actions">
+        ${open}
         <button class="btn sm" data-note-card="${id}">→ cartão</button>
         <button class="btn sm" data-note-task="${id}">→ tarefa</button>
         <button class="btn ghost sm" data-note-drop="${id}">descartar</button>
@@ -390,11 +396,21 @@ let lastInbox = { notes: {}, distractions: {} };
 const currentNote = (id) => lastInbox.notes[id]?.text ?? "";
 const currentDistraction = (id) => lastInbox.distractions[id]?.text ?? "";
 
+// Normaliza o link digitado à mão: sem esquema, assume https:// (assim
+// "github.com/x/pull/1" já vira clicável). Vazio continua vazio.
+function normalizeUrl(raw) {
+  if (!raw) return "";
+  return /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+// Só linka http(s): evita href com javascript: e afins vindo do campo livre.
+const isHttpUrl = (u) => /^https?:\/\//i.test(u ?? "");
+
 $("noteForm").onsubmit = async (e) => {
   e.preventDefault();
   const text = $("noteText").value.trim();
   if (!text) return;
-  await store.captureNote(text);
+  const url = normalizeUrl($("noteUrl").value.trim());
+  await store.captureNote(text, url ? { url } : {});
   e.target.reset();
 };
 
