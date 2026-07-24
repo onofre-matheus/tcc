@@ -113,7 +113,7 @@ Triagem de nota que vira cartão emite **dois eventos**: `card.created` e
 | `task.prioritized` | `task_id, priority: "A"\|"B"\|"C"` |
 | `task.completed` | `task_id` |
 | `task.deleted` (1.1) | `task_id` |
-| `appointment.created` | `appointment_id, title, starts_at, ends_at` |
+| `appointment.created` (v2) | `appointment_id, title, starts_at, ends_at, importance?` |
 | `appointment.cancelled` (1.1) | `appointment_id` |
 
 Tarefa **não tem campo de descrição** — decisão deliberada: tarefa é ação
@@ -122,6 +122,15 @@ nota (`note.captured`), e a resposta do sistema para "não sei por onde
 começar" é a decomposição em subtarefas (`parent_id`), não a anotação.
 `task.deleted` é tombstone (descarte não tem valor histórico, ao contrário
 do arquivamento de cartões); `appointment.cancelled` idem.
+
+`importance` (v2 de `appointment.created`, opcional) marca o compromisso como
+`"important"`. É lido pela extensão para os **lembretes com antecedência**:
+compromisso comum avisa na reta final (1 dia, 1 hora, 10 min e na hora);
+`"important"` ganha, antes disso, uma cascata semanal (até 8 semanas —
+"marquei com 1 mês, me lembre 1× por semana") e aparece como marca d'água fixa
+no topo. Os lembretes são notificações do navegador (service worker +
+`chrome.alarms`), portanto uma capacidade da extensão; a CLI ignora o campo.
+Projeções leem v1 e v2 (v1 ≡ sem importância).
 
 ### Sessões de foco e pausas
 

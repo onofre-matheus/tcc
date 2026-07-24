@@ -69,10 +69,11 @@ describe("cenário de demonstração da extensão", () => {
     expect(t.alerts.too_many_a).toBe(false);
   });
 
-  it("agenda com compromissos de hoje e de amanhã", async () => {
+  it("agenda com compromissos de hoje, de amanhã e a defesa importante", async () => {
     const log = await seededLog();
     const c = await log.project(calendar, day);
-    expect(c.upcoming).toHaveLength(2);
+    expect(c.upcoming).toHaveLength(3);
+    expect(c.appointments["a-defesa"].importance).toBe("important");
   });
 
   it("é idempotente: injetar duas vezes não adiciona nada", async () => {

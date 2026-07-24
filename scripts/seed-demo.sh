@@ -91,10 +91,14 @@ emit seed-23 note.captured "${D1}T15:00:00.000Z" '{"note_id":"n-ostep","text":"L
 # Fase 2 — os dados de hoje entram pela própria CLI (exercita o binário real;
 # o Lamport continua de max(lc) do log injetado).
 AMANHA=$(date -d tomorrow +%Y-%m-%d)
+SEMANA=$(date -d '+7 days' +%Y-%m-%d)
 H1=$(date -d '+1 hour' +%H:%M)
 H2=$(date -d '+2 hours' +%H:%M)
 "$DN" c "Aula de Redes de Computadores" "$H1-$H2"
 "$DN" c "Orientação com o Renan" 14:00-15:00 --dia "$AMANHA"
+# Compromisso importante daqui a 1 semana. A marcação de importância e a
+# cascata de lembretes (semanal → 1 dia → 1 hora → 10 min) são da extensão.
+"$DN" c "Defesa do TCC (banca)" 15:00-17:00 --dia "$SEMANA"
 "$DN" t "Escrever a seção Implementação do capítulo 4" -p A
 "$DN" t "Revisar o capítulo de escalonamento do OSTEP" -p B
 "$DN" t "Organizar as referências no BibTeX" -p C

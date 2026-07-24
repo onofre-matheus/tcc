@@ -25,9 +25,39 @@ async function render() {
     store.state.calendar(), store.state.tasks(), store.state.stats(),
   ]);
   renderStreak(statsState);
+  renderApptBanner(cal);
   renderCalendar(cal);
   renderDay(cal);
   renderTasks(tasksState);
+}
+
+// "Marca d'água" do próximo compromisso importante: fica sempre visível no topo
+// para lembrar com antecedência (o que o usuário pediu). A notificação de fato
+// vem do service worker; aqui é só o reforço visual enquanto o popup está aberto.
+const bannerFmt = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+});
+function untilLabel(ms) {
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `em ${plural(min, "minuto", "minutos")}`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `em ${plural(h, "hora", "horas")}`;
+  const d = Math.round(h / 24);
+  if (d < 14) return `em ${plural(d, "dia", "dias")}`;
+  return `em ${plural(Math.round(d / 7), "semana", "semanas")}`;
+}
+function renderApptBanner(cal) {
+  const el = $("apptBanner");
+  const nowMs = simNow().getTime();
+  const next = cal.upcoming
+    .map((id) => cal.appointments[id])
+    .find((a) => a.importance === "important" && Date.parse(a.starts_at) >= nowMs);
+  if (!next) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML =
+    `<span class="star">⭐</span>` +
+    `<span class="grow"><strong>${esc(next.title)}</strong> · ${untilLabel(Date.parse(next.starts_at) - nowMs)}</span>` +
+    `<span class="when">${bannerFmt.format(new Date(next.starts_at))}</span>`;
 }
 
 function plural(n, one, many) {
@@ -86,7 +116,8 @@ function renderDay(cal) {
     ? ids.map((id) => {
         const a = cal.appointments[id];
         const t = `${timeFmt.format(new Date(a.starts_at))}–${timeFmt.format(new Date(a.ends_at))}`;
-        return `<div class="appt"><span class="time">${t}</span><span class="grow title">${esc(a.title)}</span>
+        const star = a.importance === "important" ? "⭐ " : "";
+        return `<div class="appt"><span class="time">${t}</span><span class="grow title">${star}${esc(a.title)}</span>
           <button class="btn ghost sm" data-cancel="${id}" title="Cancelar compromisso">✕</button></div>`;
       }).join("")
     : '<div class="empty">Sem compromissos.</div>';
@@ -227,7 +258,8 @@ $("apptForm").onsubmit = async (e) => {
   // Interpreta o horário no fuso local do dia selecionado e grava em UTC.
   const startsAt = new Date(`${selectedKey}T${start}`).toISOString();
   const endsAt = new Date(`${selectedKey}T${end}`).toISOString();
-  await store.createAppointment(title, startsAt, endsAt);
+  const importance = $("apptImportant").checked ? "important" : undefined;
+  await store.createAppointment(title, startsAt, endsAt, { importance });
   e.target.reset();
 };
 

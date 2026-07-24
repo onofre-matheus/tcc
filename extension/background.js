@@ -11,7 +11,8 @@
 //   notificação chega com o painel fechado ou minimizado. É ele quem grava o
 //   session.ended nesse caso; o painel, aberto, apenas espelha o fim.
 
-import { captureNote, logCheckin, endSession, log, ready } from "./ui/store.js";
+import { captureNote, logCheckin, endSession, log, ready, state } from "./ui/store.js";
+import { dueReminders, reminderOffsets } from "./core/calendar.js";
 
 const MENU_CAPTURE = "capture-selection";
 const MENU_PALACE = "open-palace";
@@ -29,6 +30,15 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ["all"],
     });
   });
+  syncAppointmentReminders();
+});
+
+// Rearma o alarme da agenda ao abrir o navegador (o service worker pode ter
+// sido descarregado) e sempre que o log de eventos muda — assim um compromisso
+// recém-criado no popup já entra na fila de lembretes sem precisar reabri-lo.
+chrome.runtime.onStartup.addListener(() => syncAppointmentReminders());
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.events) syncAppointmentReminders();
 });
 
 // Abre o side panel também ao clicar no ícone com o botão... não: o ícone abre
@@ -57,7 +67,86 @@ const CHECKIN_KEY = "active_checkin";
 const FOCUS_END_ALARM = "pnn-focus-end";
 const FOCUS_KEY = "active_focus";
 
+// Fim da pausa (RF do lembrete de pausa): o side panel arma este alarme para o
+// instante planejado da pausa. Ao disparar, apenas avisa "hora de voltar" — não
+// grava pause.ended, pois a duração real vem de quando o usuário de fato volta.
+const PAUSE_END_ALARM = "pnn-pause-end";
+const PAUSE_KEY = "active_pause";
+
+// ---------- Lembretes de compromissos (RF: avisar antes) ----------
+// Mesmo mecanismo do "fim do foco", aplicado à agenda: um alarme acorda o
+// service worker no próximo lembrete e dispara a notificação mesmo com o painel
+// fechado. A regra de *quando* lembrar é pura (core/calendar.js); aqui ficam só
+// o disparo, o dedupe (fired_appt_reminders) e o reagendamento do alarme.
+const APPT_ALARM = "pnn-appt-reminders";
+const APPT_FIRED_KEY = "fired_appt_reminders";
+
+const whenFmt = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+});
+
+async function syncAppointmentReminders() {
+  if (!chrome.alarms) return;
+  await ready;
+  const cal = await state.calendarNow();
+  const stored = await chrome.storage.local.get(APPT_FIRED_KEY);
+  const fired = stored[APPT_FIRED_KEY] ?? {};
+  const now = new Date().toISOString();
+  const nowMs = Date.parse(now);
+
+  const { due, next } = dueReminders(cal, { now, fired });
+
+  for (const r of due) {
+    const near = r.offset <= 60; // reta final (1 hora, 10 min, na hora)
+    chrome.notifications.create(`appt:${r.key}:${Date.now()}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: `${r.importance === "important" ? "⭐" : "📅"} ${r.label}: ${r.title}`,
+      message: whenFmt.format(new Date(r.starts_at)),
+      priority: near ? 2 : 1,
+      requireInteraction: r.offset <= 10, // reta final fica na tela até ver
+    });
+    fired[r.key] = true;
+  }
+
+  // Poda o dedupe: mantém só chaves de compromissos ainda futuros (com folga),
+  // para não crescer indefinidamente conforme a agenda avança.
+  const live = new Set();
+  for (const [id, a] of Object.entries(cal.appointments)) {
+    if (Date.parse(a.starts_at) >= nowMs - 6 * 60 * 60 * 1000) {
+      for (const off of reminderOffsets(a.importance)) live.add(`${id}@${off}`);
+    }
+  }
+  for (const k of Object.keys(fired)) if (!live.has(k)) delete fired[k];
+  await chrome.storage.local.set({ [APPT_FIRED_KEY]: fired });
+
+  // Reagenda para o próximo lembrete. Alarmes MV3 persistem entre reinícios do
+  // navegador, então um instante distante (semanas à frente) é confiável.
+  chrome.alarms.clear(APPT_ALARM);
+  if (next != null) chrome.alarms.create(APPT_ALARM, { when: next });
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === APPT_ALARM) {
+    await syncAppointmentReminders();
+    return;
+  }
+
+  if (alarm.name === PAUSE_END_ALARM) {
+    const { [PAUSE_KEY]: pause } = await chrome.storage.local.get(PAUSE_KEY);
+    chrome.alarms.clear(PAUSE_END_ALARM);
+    await chrome.storage.local.remove(PAUSE_KEY);
+    if (!pause) return;
+    chrome.notifications.create(`pause-done:${pause.pause_id}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: "Pausa concluída ☕",
+      message: "Hora de voltar aos estudos — clique em “voltar” quando estiver pronto.",
+      priority: 2,
+    });
+    return;
+  }
+
   if (alarm.name === CHECKIN_ALARM) {
     const { [CHECKIN_KEY]: active } = await chrome.storage.local.get(CHECKIN_KEY);
     if (!active || Date.now() > active.end_ms) {
@@ -114,7 +203,12 @@ chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) =>
 
 // Clique no corpo da notificação (sem responder) apenas a dispensa.
 chrome.notifications.onClicked.addListener((notifId) => {
-  if (notifId.startsWith("checkin:") || notifId.startsWith("focus-done:")) {
+  if (
+    notifId.startsWith("checkin:") ||
+    notifId.startsWith("focus-done:") ||
+    notifId.startsWith("appt:") ||
+    notifId.startsWith("pause-done:")
+  ) {
     chrome.notifications.clear(notifId);
   }
 });

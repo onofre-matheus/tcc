@@ -34,8 +34,22 @@ body { width: 600px; max-height: 560px; overflow-y: auto; overflow-x: hidden; }
 .day-detail h3 { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .day-detail h3::first-letter { text-transform: uppercase; }
 .appt-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.appt-important { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.appt-important input { width: auto; }
 .appt { display: flex; gap: 6px; font-size: 12px; padding: 4px 0; }
 .appt .time { color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Marca d'água do próximo compromisso importante: sempre no topo, lembrete
+   permanente com antecedência (RF do lembrete de compromissos). */
+.appt-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 12px 12px; padding: 8px 12px;
+  border: 1px solid var(--b); border-radius: var(--radius);
+  background: var(--accent-soft); font-size: 12px; color: var(--text);
+}
+.appt-banner .star { font-size: 15px; }
+.appt-banner .grow { flex: 1; min-width: 0; }
+.appt-banner .when { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Tarefas */
 .task-form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }

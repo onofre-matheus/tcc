@@ -55,6 +55,9 @@ export const debug = {
 
 export const state = {
   calendar: () => log.project(calendar, dayParams()),
+  // Como os lembretes disparam por chrome.alarms (relógio real), ignoram o
+  // offset de DEBUG e projetam o calendário no agora de parede.
+  calendarNow: () => log.project(calendar, { now: new Date().toISOString(), tz: tz() }),
   tasks: () => log.project(tasks),
   leitner: () => log.project(leitner, dayParams()),
   decks: () => log.project(decks),
@@ -94,8 +97,14 @@ export const completeTask = (task_id) =>
 export const deleteTask = (task_id) =>
   log.append("task.deleted", { task_id });
 
-export const createAppointment = (title, starts_at, ends_at) =>
-  log.append("appointment.created", { appointment_id: id("a"), title, starts_at, ends_at });
+// importance? (v2, opcional): "important" pede a cascata de lembretes com
+// antecedência (ver core/calendar.js). Sem ele, mantém o evento v1 intacto.
+export const createAppointment = (title, starts_at, ends_at, { importance } = {}) => {
+  const payload = { appointment_id: id("a"), title, starts_at, ends_at };
+  return importance
+    ? log.append("appointment.created", { ...payload, importance }, { v: 2 })
+    : log.append("appointment.created", payload);
+};
 
 export const cancelAppointment = (appointment_id) =>
   log.append("appointment.cancelled", { appointment_id });

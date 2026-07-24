@@ -12,6 +12,8 @@
 //   - a sessão de ontem tem check-in de atenção (na tarefa em 1 de 2)
 //   - caixa de entrada com 1 nota (com fonte) e 1 distração
 //   - agenda de hoje (+1h) e de amanhã (14h), lista A/B/C com 2 subtarefas
+//   - compromisso importante daqui a 1 semana (marca d'água + cascata de
+//     lembretes da extensão)
 
 const DEVICE = "seed-ext";
 
@@ -31,6 +33,12 @@ export function buildDemoEvents(nowIso) {
   const tomorrowAt = (hourLocal) => {
     const d = new Date(now);
     d.setDate(d.getDate() + 1);
+    d.setHours(hourLocal, 0, 0, 0);
+    return d.toISOString();
+  };
+  const inDaysAt = (days, hourLocal) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
     d.setHours(hourLocal, 0, 0, 0);
     return d.toISOString();
   };
@@ -95,6 +103,9 @@ export function buildDemoEvents(nowIso) {
     // Hoje: agenda e lista A/B/C com quebra de tarefas
     ev("seed-24", "appointment.created", nowIso, { appointment_id: "a-aula", title: "Aula de Redes de Computadores", starts_at: inHours(1), ends_at: inHours(2) }),
     ev("seed-25", "appointment.created", nowIso, { appointment_id: "a-orient", title: "Orientação com o Renan", starts_at: tomorrowAt(14), ends_at: tomorrowAt(15) }),
+    // Compromisso importante daqui a 1 semana: dispara a cascata de lembretes
+    // (semanal → 1 dia → 1 hora → 10 min) e a "marca d'água" no topo do popup.
+    ev("seed-25b", "appointment.created", nowIso, { appointment_id: "a-defesa", title: "Defesa do TCC (banca)", starts_at: inDaysAt(7, 15), ends_at: inDaysAt(7, 17), importance: "important" }, 2),
     ev("seed-26", "task.created", nowIso, { task_id: "t-imp", title: "Escrever a seção Implementação do capítulo 4" }),
     ev("seed-27", "task.prioritized", nowIso, { task_id: "t-imp", priority: "A" }),
     ev("seed-28", "task.created", nowIso, { task_id: "t-ost", title: "Revisar o capítulo de escalonamento do OSTEP" }),

@@ -54,6 +54,23 @@ async function disarmFocusEnd() {
   await chrome.storage.local.remove(FOCUS_KEY);
 }
 
+// Fim da pausa: mesmo padrão do fim do foco. O alarme dispara no service worker
+// (funciona com o painel fechado) e só avisa "hora de voltar" — não encerra a
+// pausa, pois a duração real vem de quando o usuário volta.
+const PAUSE_END_ALARM = "pnn-pause-end";
+const PAUSE_KEY = "active_pause";
+
+async function armPauseEnd(pauseId, endMs) {
+  if (!chrome.alarms) return;
+  await chrome.storage.local.set({ [PAUSE_KEY]: { pause_id: pauseId, end_ms: endMs } });
+  chrome.alarms.create(PAUSE_END_ALARM, { when: endMs });
+}
+async function disarmPauseEnd() {
+  if (!chrome.alarms) return;
+  chrome.alarms.clear(PAUSE_END_ALARM);
+  await chrome.storage.local.remove(PAUSE_KEY);
+}
+
 // ---------- Sessão de foco / pomodoro ----------
 function plural(n, one, many) {
   return `${n} ${n === 1 ? one : many}`;
@@ -81,6 +98,16 @@ function tick() {
   if (left <= 0) completeLocally();
 }
 async function beginSession(kind, label) {
+  // Começar um foco encerra uma pausa em curso (estados mutuamente exclusivos):
+  // fecha o registro e desarma o lembrete de fim de pausa para não notificar à toa.
+  if (pause) {
+    clearInterval(pause.interval);
+    const pid = pause.id;
+    pause = null;
+    $("pauseBtn").textContent = "☕ Pausa";
+    await disarmPauseEnd();
+    await store.endPause(pid);
+  }
   const minutes = Math.max(1, Number($("minutes").value) || 25);
   // Alvo da sessão: a tarefa escolhida (foco) ou o deck (revisão) — target_id.
   const taskId = kind === "task" ? $("focusTask").value || undefined : undefined;
@@ -154,6 +181,7 @@ async function togglePause() {
     const pid = pause.id;
     pause = null;
     btn.textContent = "☕ Pausa";
+    await disarmPauseEnd();
     await store.endPause(pid);
     return;
   }
@@ -165,7 +193,9 @@ async function togglePause() {
   }
   const minutes = Number($("pauseMin").value) || 5;
   const pid = await store.startPause(minutes);
-  pause = { id: pid, endMs: Date.now() + minutes * 60000, interval: null };
+  const endMs = Date.now() + minutes * 60000;
+  pause = { id: pid, endMs, interval: null };
+  await armPauseEnd(pid, endMs);
   const paint = () => {
     const left = Math.max(0, pause.endMs - Date.now());
     const mm = String(Math.floor(left / 60000)).padStart(2, "0");
