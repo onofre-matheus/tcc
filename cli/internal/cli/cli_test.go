@@ -105,6 +105,37 @@ func TestCompromissoEmHorarioLocal(t *testing.T) {
 	}
 }
 
+func TestCompromissoImportanteMarcaEExibeNaAgenda(t *testing.T) {
+	a, _ := newTestApp(t)
+	out := run(t, a, "c", "Defesa do TCC", "15:00-17:00", "--dia", "2026-07-15", "--importante")
+	if !strings.Contains(out, "⭐") {
+		t.Fatalf("a confirmação deveria marcar como importante: %s", out)
+	}
+
+	events, err := a.Store.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events[0].V != 2 {
+		t.Fatalf("appointment.created importante deveria ser v2, veio v%d", events[0].V)
+	}
+	var payload struct {
+		Importance string `json:"importance"`
+	}
+	if err := json.Unmarshal(events[0].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Importance != "important" {
+		t.Fatalf("importance = %q, quer \"important\"", payload.Importance)
+	}
+
+	// Marca d'água na tela do dia: o próximo importante lembra com antecedência.
+	dia := run(t, a, "dia")
+	if !strings.Contains(dia, "⭐") || !strings.Contains(dia, "Defesa do TCC") || !strings.Contains(dia, "em 7 dias") {
+		t.Fatalf("`pnn dia` deveria destacar o compromisso importante: %s", dia)
+	}
+}
+
 // Cenário compartilhado: pai A com subtarefa A, mais uma tarefa B.
 func seedTasks(t *testing.T, a *app.App) {
 	t.Helper()

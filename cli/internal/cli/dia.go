@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const importantStar = "⭐ "
+
 func newDiaCmd(a *app.App) *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
@@ -60,11 +62,23 @@ func runDia(a *app.App, asJSON bool) error {
 	fmt.Fprintln(a.Out, rule)
 	fmt.Fprintf(a.Out, " %s\n\n", th.Bold(longDatePT(view.today)))
 
+	// Marca d'água do próximo compromisso importante (RF do lembrete): fica no
+	// topo para lembrar com antecedência, como o banner do popup da extensão.
+	if appt, ok := view.nextImportant(a.Params().Now); ok {
+		startDay, _ := localDateOf(appt.StartsAt, a.TZ)
+		fmt.Fprintf(a.Out, " %s %s · %s (%s)\n\n", th.Warn("⭐"), th.Bold(appt.Title),
+			untilLabelPT(a.Params().Now, appt.StartsAt), longDatePT(startDay))
+	}
+
 	if appts := view.todayAppointments(a.TZ); len(appts) > 0 {
 		for _, id := range appts {
 			appt := view.calendar.Appointments[id]
-			fmt.Fprintf(a.Out, " %s–%s  %s\n",
-				th.Blue(localClock(appt.StartsAt, a.TZ)), th.Blue(localClock(appt.EndsAt, a.TZ)), appt.Title)
+			star := ""
+			if appt.Importance == "important" {
+				star = importantStar
+			}
+			fmt.Fprintf(a.Out, " %s–%s  %s%s\n",
+				th.Blue(localClock(appt.StartsAt, a.TZ)), th.Blue(localClock(appt.EndsAt, a.TZ)), star, appt.Title)
 		}
 		fmt.Fprintln(a.Out)
 	}

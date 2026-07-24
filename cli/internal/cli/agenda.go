@@ -50,8 +50,12 @@ func newAgendaCmd(a *app.App) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(a.Out, " %d  %s  %s–%s  %s\n", i+1, th.Blue(day),
-					th.Blue(localClock(appt.StartsAt, a.TZ)), th.Blue(localClock(appt.EndsAt, a.TZ)), appt.Title)
+				star := ""
+				if appt.Importance == "important" {
+					star = importantStar
+				}
+				fmt.Fprintf(a.Out, " %d  %s  %s–%s  %s%s\n", i+1, th.Blue(day),
+					th.Blue(localClock(appt.StartsAt, a.TZ)), th.Blue(localClock(appt.EndsAt, a.TZ)), star, appt.Title)
 			}
 			return a.SaveView(refs)
 		},

@@ -5,6 +5,7 @@ package cli
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -117,6 +118,47 @@ func taskTree(state core.TasksState) []taskRow {
 
 func (v *dayView) pendingInbox() int {
 	return len(v.inbox.PendingNotes) + len(v.inbox.PendingDistractions)
+}
+
+// nextImportant devolve o próximo compromisso importante ainda por começar — o
+// equivalente da CLI à "marca d'água" da extensão: como o terminal não notifica
+// com a janela fechada, o lembrete aparece ao rodar `pnn`.
+func (v *dayView) nextImportant(nowUTC string) (core.Appointment, bool) {
+	now, err := time.Parse(time.RFC3339, nowUTC)
+	if err != nil {
+		return core.Appointment{}, false
+	}
+	for _, id := range sortedAppointmentIDs(v.calendar) {
+		appt := v.calendar.Appointments[id]
+		if appt.Importance != "important" {
+			continue
+		}
+		if start, err := time.Parse(time.RFC3339, appt.StartsAt); err == nil && start.After(now) {
+			return appt, true
+		}
+	}
+	return core.Appointment{}, false
+}
+
+// untilLabelPT resume a antecedência em uma unidade ("em 6 dias", "em 2
+// semanas"), como a marca d'água da extensão.
+func untilLabelPT(now, start string) string {
+	n, err1 := time.Parse(time.RFC3339, now)
+	s, err2 := time.Parse(time.RFC3339, start)
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	d := s.Sub(n)
+	if min := int(math.Round(d.Minutes())); min < 60 {
+		return "em " + plural(min, "minuto", "minutos")
+	}
+	if h := int(math.Round(d.Hours())); h < 24 {
+		return "em " + plural(h, "hora", "horas")
+	}
+	if days := int(math.Round(d.Hours() / 24)); days < 14 {
+		return "em " + plural(days, "dia", "dias")
+	}
+	return "em " + plural(int(math.Round(d.Hours()/24/7)), "semana", "semanas")
 }
 
 func priorityLabel(task core.Task) string {

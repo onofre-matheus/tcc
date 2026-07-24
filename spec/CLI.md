@@ -73,11 +73,15 @@ símbolos e layout cobre daltonismo (acessibilidade, cap. 3).
 | `pnn t "título" [-p A\|B\|C] [--sub N] [--data AAAA-MM-DD]` | `task.created` (+ `task.prioritized`) |
 | `pnn feito N` | `task.completed` |
 | `pnn pri N A\|B\|C` | `task.prioritized` |
-| `pnn c "título" 16:00-17:00 [--dia AAAA-MM-DD]` | `appointment.created` |
+| `pnn c "título" 16:00-17:00 [--dia AAAA-MM-DD] [--importante]` | `appointment.created` (v2 com `importance` se `--importante`) |
 | `pnn agenda` | — (calendar; numera os próximos compromissos) |
 
 `--sub N` cria subtarefa do item N da tela do dia (quebra de tarefas, RF04).
 A tela do dia sinaliza `⚠ >4 A ativas` (RF03) e tarefas B tocadas antes das A.
+`--importante` marca o compromisso como `importance: "important"`: a tela do dia
+o destaca com ⭐ como marca d'água ("⭐ … · em N dias") — o equivalente da CLI
+aos lembretes com antecedência que a extensão dispara por notificação. A regra
+de *quando* lembrar é a projeção `reminders` compartilhada (SPEC §4.9).
 
 ### Edição e arquivamento (catálogo v1.1)
 

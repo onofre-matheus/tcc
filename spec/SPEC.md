@@ -292,9 +292,29 @@ appointment_minutes }`.
   e de `upcoming`.
 - `upcoming` = compromissos ainda não encerrados (`ends_at >= now`),
   ordenados por `(starts_at ↑, id ↑)`.
+- `importance` (quando presente) é repassado em cada compromisso.
 
-Saída: `{ appointments: { <appointment_id>: { title, starts_at, ends_at } },
-upcoming: [appointment_id…] }`.
+Saída: `{ appointments: { <appointment_id>: { title, starts_at, ends_at,
+importance? } }, upcoming: [appointment_id…] }`.
+
+### 4.9 Lembretes (`projection: "reminders"`)
+
+Projeção pura dos lembretes de compromisso **ainda por vir**, a partir da agenda
+e de `now`. Para cada compromisso, os lembretes caem em minutos antes do início:
+compromisso comum em `[1440, 60, 10, 0]` (1 dia, 1 hora, 10 min, na hora);
+`importance: "important"` ganha antes disso a cascata semanal
+`[80640, 70560, 60480, 50400, 40320, 30240, 20160, 10080]` (8→1 semanas). Entra em
+`pending` o lembrete cujo instante (`starts_at − offset`) seja `>= now`; a lista
+é ordenada por `(instante ↑, appointment_id ↑, offset ↑)`. O rótulo concorda em
+número e gênero ("Falta 1 semana", "Faltam 10 minutos", "Começa agora").
+
+Não modela o que já foi notificado: **dedupe e entrega são estado de runtime de
+cada cliente** — a extensão dispara notificação do navegador em segundo plano
+(`chrome.alarms`), a CLI, que não roda com o terminal fechado, exibe o próximo
+importante como marca d'água ao rodar `pnn`. A regra de *quando* lembrar é a
+mesma nos dois e travada por este vetor.
+
+Saída: `{ pending: [ { appointment_id, offset_minutes, label } … ] }`.
 
 ## 5. Sincronização
 

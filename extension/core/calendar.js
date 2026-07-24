@@ -71,6 +71,32 @@ export function reminderLabel(offsetMin) {
   return `Faltam ${offsetMin} minutos`;
 }
 
+// Projeção pura dos lembretes ainda por vir (instante >= now), ordenados do mais
+// próximo ao mais distante — o alvo do vetor de conformidade compartilhado com a
+// CLI (cli/core/reminders.go). Não conhece o que já foi notificado: dedupe e
+// entrega são estado de runtime de cada cliente (ver dueReminders / background.js).
+export function reminders(events, { now }) {
+  const { appointments } = project(events, { now });
+  const nowMs = Date.parse(now);
+  const pending = [];
+  for (const [id, a] of Object.entries(appointments)) {
+    const startMs = Date.parse(a.starts_at);
+    for (const offset of reminderOffsets(a.importance)) {
+      const at = startMs - offset * 60000;
+      if (at >= nowMs) {
+        pending.push({ appointment_id: id, offset_minutes: offset, label: reminderLabel(offset), at });
+      }
+    }
+  }
+  pending.sort(
+    (x, y) =>
+      x.at - y.at ||
+      (x.appointment_id < y.appointment_id ? -1 : x.appointment_id > y.appointment_id ? 1 : 0) ||
+      x.offset_minutes - y.offset_minutes
+  );
+  return { pending: pending.map(({ at, ...rest }) => rest) };
+}
+
 // Lembretes vencidos agora e o próximo instante a agendar, a partir da projeção
 // do calendário. `fired` é o conjunto (chave→true) de lembretes já notificados,
 // para não repetir. `graceMs` descarta lembretes muito atrasados: se eu criar

@@ -8,7 +8,7 @@ import { project as tasks } from "../core/tasks.js";
 import { project as decks } from "../core/decks.js";
 import { project as stats } from "../core/stats.js";
 import { project as inbox } from "../core/inbox.js";
-import { project as calendar } from "../core/calendar.js";
+import { project as calendar, reminders } from "../core/calendar.js";
 import { project as review } from "../core/review.js";
 
 const vectorsDir = join(
@@ -34,6 +34,8 @@ function runProjection(vector, events) {
       return inbox(events);
     case "calendar":
       return calendar(events, { now: vector.now, tz: vector.tz });
+    case "reminders":
+      return reminders(events, { now: vector.now, tz: vector.tz });
     case "review":
       return review(events, { now: vector.now, tz: vector.tz });
     default:

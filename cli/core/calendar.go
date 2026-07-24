@@ -14,6 +14,9 @@ type Appointment struct {
 	Title    string `json:"title"`
 	StartsAt string `json:"starts_at"`
 	EndsAt   string `json:"ends_at"`
+	// importance? (v2, opcional): "important" muda a agenda de lembretes —
+	// cascata semanal com antecedência, além da reta final. Ausente = comum.
+	Importance string `json:"importance,omitempty"`
 }
 
 type CalendarState struct {
@@ -38,12 +41,13 @@ func Calendar(events []Event, p Params) (CalendarState, error) {
 				Title         string `json:"title"`
 				StartsAt      string `json:"starts_at"`
 				EndsAt        string `json:"ends_at"`
+				Importance    string `json:"importance"`
 			}](event)
 			if err != nil {
 				return CalendarState{}, err
 			}
 			state.Appointments[pl.AppointmentID] = Appointment{
-				Title: pl.Title, StartsAt: pl.StartsAt, EndsAt: pl.EndsAt,
+				Title: pl.Title, StartsAt: pl.StartsAt, EndsAt: pl.EndsAt, Importance: pl.Importance,
 			}
 
 		case "appointment.cancelled":

@@ -92,6 +92,7 @@ var timeRangePattern = regexp.MustCompile(`^(\d{2}:\d{2})-(\d{2}:\d{2})$`)
 
 func newCCmd(a *app.App) *cobra.Command {
 	var day string
+	var important bool
 	cmd := &cobra.Command{
 		Use:   `c "título" HH:MM-HH:MM`,
 		Short: "agenda um compromisso no calendário único (appointment.created)",
@@ -122,19 +123,34 @@ func newCCmd(a *app.App) *cobra.Command {
 				return fmt.Errorf("fim %s não vem depois do início %s", match[2], match[1])
 			}
 
-			if _, err := a.Store.Append("appointment.created", map[string]any{
+			payload := map[string]any{
 				"appointment_id": store.UUIDv7(),
 				"title":          title,
 				"starts_at":      startsAt,
 				"ends_at":        endsAt,
-			}); err != nil {
-				return err
 			}
-			fmt.Fprintf(a.Out, "✔ agendado: %s, %s %s\n", title, longDatePT(day), strings.Replace(timeRange, "-", "–", 1))
+			// --importante grava appointment.created v2 com importance="important":
+			// a extensão o lembra com semanas de antecedência (marca d'água + cascata).
+			var appendErr error
+			if important {
+				payload["importance"] = "important"
+				_, appendErr = a.Store.AppendV("appointment.created", 2, payload)
+			} else {
+				_, appendErr = a.Store.Append("appointment.created", payload)
+			}
+			if appendErr != nil {
+				return appendErr
+			}
+			star := ""
+			if important {
+				star = "⭐ "
+			}
+			fmt.Fprintf(a.Out, "✔ agendado: %s%s, %s %s\n", star, title, longDatePT(day), strings.Replace(timeRange, "-", "–", 1))
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&day, "dia", "", "data AAAA-MM-DD (padrão: hoje)")
+	cmd.Flags().BoolVar(&important, "importante", false, "marca como importante (lembretes com antecedência na extensão)")
 	return cmd
 }
 

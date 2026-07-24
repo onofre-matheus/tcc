@@ -96,9 +96,10 @@ H1=$(date -d '+1 hour' +%H:%M)
 H2=$(date -d '+2 hours' +%H:%M)
 "$DN" c "Aula de Redes de Computadores" "$H1-$H2"
 "$DN" c "Orientação com o Renan" 14:00-15:00 --dia "$AMANHA"
-# Compromisso importante daqui a 1 semana. A marcação de importância e a
-# cascata de lembretes (semanal → 1 dia → 1 hora → 10 min) são da extensão.
-"$DN" c "Defesa do TCC (banca)" 15:00-17:00 --dia "$SEMANA"
+# Compromisso importante daqui a 1 semana (--importante grava appointment.created
+# v2 com importance): a extensão o lembra com semanas de antecedência (marca
+# d'água + cascata); a CLI o destaca com ⭐ e marca d'água ao rodar `pnn`.
+"$DN" c "Defesa do TCC (banca)" 15:00-17:00 --dia "$SEMANA" --importante
 "$DN" t "Escrever a seção Implementação do capítulo 4" -p A
 "$DN" t "Revisar o capítulo de escalonamento do OSTEP" -p B
 "$DN" t "Organizar as referências no BibTeX" -p C
