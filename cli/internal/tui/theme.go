@@ -30,11 +30,12 @@ func hyperlink(url, text string) string {
 
 // pauseView é a tela VERDE compartilhada: descanso cronometrado + o que a
 // sessão rendeu + próximos passos.
-func pauseView(head string, timer countdown, summary []string, actions string) string {
+func pauseView(head string, timer countdown, summary []string, actions string, width int) string {
 	var b strings.Builder
 	b.WriteString(greenTitle.Render("✔ " + head))
 	b.WriteString("\n\n")
-	b.WriteString("        " + greenTimer.Render("░  "+timer.clock()+"  ░") + "  pausa\n\n")
+	b.WriteString(bigClock(timer, "PAUSA", greenTimer, width))
+	b.WriteString("\n\n " + dim.Render("a pausa é parte do bloco — descanse até o despertador") + "\n\n")
 	for _, line := range summary {
 		b.WriteString(" " + line + "\n")
 	}

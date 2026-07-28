@@ -58,6 +58,27 @@ AZUL …
   `session.ended` v2 com `reason?`; os motivos agregados aparecem na
   retrospectiva para o próprio aluno validar seus padrões.
 
+### Notificações de desktop
+
+Três momentos precisam alcançar o usuário mesmo com o terminal atrás de outra
+janela — é o mesmo papel que a extensão cumpre no navegador (paridade):
+
+| momento | aviso |
+|---|---|
+| timer do foco/revisão soa | urgente: "N min de foco concluídos 🐘 · pausa de M min começou" |
+| fim da pausa | urgente: "Fim da pausa · de volta ao foco" |
+| check-in de atenção | comum: repete a pergunta que está na tela |
+
+Quem interrompe (Esc, Ctrl+C) está no teclado: não há o que avisar.
+
+Notificação é enfeite — nenhuma falha de desktop derruba ou trava a sessão. O
+disparo sai em segundo plano (a TUI nunca gagueja) e o programa espera no
+máximo 3 s por ele ao sair. `PNN_SILENCIO=1` desliga tudo.
+
+No **WSL** o lado Linux normalmente não tem daemon de notificação: quando
+D-Bus, `notify-send` e `kdialog` falham, o aviso vai para a área de trabalho
+que existe ali, a do Windows, via toast nativo (`powershell.exe`).
+
 Fundamentação (para o texto): o modo por cor é processamento pré-atentivo — o
 estudante sabe em que estado está sem ler nada (menos carga de memória; afeto
 de Norman); vermelho = alerta/execução, verde = restauração. A redundância com
@@ -142,7 +163,14 @@ resposta` por linha; o `frame` é um campo aberto para métodos de estudo futuro
 | `pnn volta` | `pause.ended` |
 | `pnn pausa --das HH:MM --ate HH:MM [--dia D]` | `pause.logged` (retroativa — "esqueci de apertar o botão") |
 | `pnn semana [N] [--de AAAA-MM-DD]` | — (review; retrospectiva de qualquer semana) |
-| `pnn sync` | — (`POST /sync`; imprime `▲ enviados · ▼ recebidos`) |
+| `pnn sync` | — (bucket S3, SPEC §5; imprime `▲ enviados · ▼ recebidos`) |
+
+`pnn sync` é uma operação só e idempotente: baixa o que os outros dispositivos
+subiram, funde no log local (dedup por `id` + ordem total) e sobe os eventos
+que este dispositivo autorou. Configure com `PNN_S3_BUCKET` (e `PNN_S3_PREFIX`,
+`PNN_S3_ENDPOINT`, `PNN_S3_REGION`); as credenciais vêm da cadeia padrão da
+AWS, nunca de `~/.pnn`. Como cada dispositivo escreve só a própria chave no
+bucket, não há conflito a resolver nem escrita perdida — ver SPEC §5.
 
 `pnn semana` é a revisão à la Safren: foco, pausas e revisões por dia, motivos
 de interrupção agregados e o contraste agendado × executado. `N` volta N
@@ -154,7 +182,7 @@ instante de referência.
 foco, a linha de input fica **sempre focada**: qualquer texto + Enter grava
 `distraction.captured` e limpa (adiamento de distrações, RF06).
 
-**Check-in de atenção** (`--checkin N`): a cada N minutos a tela toca o sino e
+**Check-in de atenção** (`--checkin N`): a cada N minutos a tela notifica e
 pergunta "Você está na tarefa *X*?" — `[s]` sim / `[n]` distraí grava um
 `checkin.logged` binário; `Esc` pula sem gravar. É o *self-monitoring of
 attention* de Safren: os check-ins agregam em `pnn semana` como "na tarefa em
@@ -186,13 +214,31 @@ nova.
 
 ### `pnn foco 1` — VERMELHO
 
+O tempo restante é um despertador 8-bit: grande o bastante para ser lido de
+longe, sem "consultar" a tela. O dois-pontos pisca a cada segundo — é o sinal
+de que a sessão está correndo, e não congelada. O desenho não depende de cor
+(NO_COLOR e saída redirecionada continuam legíveis) e o horário vai também em
+texto na borda de baixo, para leitor de tela. Em terminal estreito demais para
+o gabinete (< 38 colunas), degrada para uma linha: `▐█  23:41  █▌`.
+
 ```
 ● FOCO · Escrever seção 4.6
 
-                    ▐█  23:41  █▌
+                        ▄▄▄                        ▄▄▄
+                       ▐███▌                      ▐███▌
+                     ┏━━ FOCO ━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+                     ┃                                  ┃
+                     ┃  ██████ ██████    ██  ██     ██  ┃
+                     ┃      ██     ██ ██ ██  ██     ██  ┃
+                     ┃  ██████ ██████    ██████     ██  ┃
+                     ┃  ██         ██ ██     ██     ██  ┃
+                     ┃  ██████ ██████        ██     ██  ┃
+                     ┃                                  ┃
+                     ┗━━━━━━━━━━━━━━━━━━━━━━━━━ 23:41 ━━┛
+                       ▀▀                            ▀▀
 
- Distração? Anote e volte:  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
- Enter grava e limpa · Esc encerra a sessão
+ Distração? anote e volte ao trabalho
+ Enter grava e limpa · Esc encerra · Ctrl+P pausa
 ```
 
 ### Pausa — VERDE
@@ -200,7 +246,20 @@ nova.
 ```
 ✔ 25 min de foco · 🐘 mandou bem!
 
-                    ░  04:32  ░   pausa
+                        ▄▄▄                        ▄▄▄
+                       ▐███▌                      ▐███▌
+                     ┏━━ PAUSA ━━━━━━━━━━━━━━━━━━━━━━━━━┓
+                     ┃                                  ┃
+                     ┃  ██████ ██  ██    ██████ ██████  ┃
+                     ┃  ██  ██ ██  ██ ██     ██     ██  ┃
+                     ┃  ██  ██ ██████    ██████ ██████  ┃
+                     ┃  ██  ██     ██ ██     ██ ██      ┃
+                     ┃  ██████     ██    ██████ ██████  ┃
+                     ┃                                  ┃
+                     ┗━━━━━━━━━━━━━━━━━━━━━━━━━ 04:32 ━━┛
+                       ▀▀                            ▀▀
+
+ a pausa é parte do bloco — descanse até o despertador
 
  Nesta sessão: 2 distrações anotadas → triar depois
  [Enter] novo foco · [t] triagem · [q] sair

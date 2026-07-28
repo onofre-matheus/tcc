@@ -318,17 +318,42 @@ Saída: `{ pending: [ { appointment_id, offset_minutes, label } … ] }`.
 
 ## 5. Sincronização
 
-Uma única operação:
+O desenho original previa um servidor com uma única operação `POST /sync`
+(sequência global, dedup por `id`, sem ler `payload`). **Implementado como
+bucket S3** (2026-07-27): mesma semântica, sem servidor para escrever e
+manter — o bucket continua sem ler `payload` e sem regra de negócio nenhuma.
+
+Layout:
 
 ```
-POST /sync
-→ { device, cursor, events: [eventos locais ainda não confirmados] }
-← { events: [eventos do servidor após cursor], cursor: novo }
+<prefixo>/<device>.jsonl   — um objeto por dispositivo
 ```
 
-O servidor mantém uma sequência global de envelopes, deduplica por `id`, **não
-lê `payload`** e não contém regra de negócio. `cursor` é a posição na
-sequência global confirmada pelo dispositivo.
+**Cada dispositivo grava somente o próprio objeto.** É essa regra que dispensa
+servidor: como dois clientes nunca escrevem a mesma chave, não existe escrita
+perdida — o risco clássico de "subir o arquivo inteiro", em que o último a
+gravar apaga em silêncio o que o outro emitiu.
+
+Um ciclo de sync é:
+
+1. listar o prefixo e baixar os objetos cujo `ETag` mudou;
+2. unir ao log local (dedup por `id` + ordem total do §2);
+3. subir os eventos cujo `device` é o próprio.
+
+Nada disso precisa de lock, escrita condicional ou retry: evento é fato
+imutável com `id` único, então a união de dois logs é o log completo, e a
+operação é idempotente — rodar de qualquer máquina, em qualquer ordem, quantas
+vezes quiser, converge para o mesmo estado.
+
+`cursor` deixa de ser posição numa sequência global e passa a guardar os
+`ETag` já baixados (e quantos eventos próprios já subiram). É **só otimização**:
+perdido ou errado, o pior que acontece é rebaixar o que já se tem, e o dedup
+absorve. Com o log local vazio ele é descartado de propósito, senão uma réplica
+recém-restaurada acharia que está em dia e ficaria vazia para sempre.
+
+Credenciais seguem a cadeia padrão da AWS; o cliente é configurado por
+`PNN_S3_BUCKET`, `PNN_S3_PREFIX`, `PNN_S3_ENDPOINT` (opcional, para R2/MinIO/
+Backblaze) e `PNN_S3_REGION`. Nenhum segredo é gravado em `~/.pnn`.
 
 ## 6. Formato dos vetores de conformidade
 

@@ -5,15 +5,21 @@ package cli
 import (
 	"fmt"
 	"math"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/onofre-matheus/tcc/cli/core"
 	"github.com/onofre-matheus/tcc/cli/internal/app"
+	"github.com/onofre-matheus/tcc/cli/internal/notify"
 	"github.com/onofre-matheus/tcc/cli/internal/tui"
 	"github.com/onofre-matheus/tcc/cli/internal/ui"
 	"github.com/onofre-matheus/tcc/cli/store"
 	"github.com/spf13/cobra"
 )
+
+// notifyGrace é o quanto a saída espera pelo último aviso de desktop — o fim
+// da pausa acontece no mesmo instante em que o programa fecha.
+const notifyGrace = 3 * time.Second
 
 func newFocoCmd(a *app.App) *cobra.Command {
 	var minutes, pause, checkin int
@@ -50,6 +56,7 @@ func newFocoCmd(a *app.App) *cobra.Command {
 				EmitV:        emitVTo(a),
 			})
 			final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
+			notify.Flush(notifyGrace) // o aviso de fim de pausa sai junto com a saída
 			if err != nil {
 				return err
 			}

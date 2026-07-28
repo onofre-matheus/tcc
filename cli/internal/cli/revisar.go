@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/onofre-matheus/tcc/cli/core"
 	"github.com/onofre-matheus/tcc/cli/internal/app"
+	"github.com/onofre-matheus/tcc/cli/internal/notify"
 	"github.com/onofre-matheus/tcc/cli/internal/tui"
 	"github.com/onofre-matheus/tcc/cli/internal/ui"
 	"github.com/onofre-matheus/tcc/cli/store"
@@ -82,6 +83,7 @@ func newRevisarCmd(a *app.App) *cobra.Command {
 				EmitV:        emitVTo(a),
 			})
 			final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
+			notify.Flush(notifyGrace) // o aviso de fim de pausa sai junto com a saída
 			if err != nil {
 				return err
 			}

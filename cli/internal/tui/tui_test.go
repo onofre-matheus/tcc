@@ -4,11 +4,26 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// A suíte não acorda o desktop: os disparos viram espiões e o que fica
+// registrado é só o par (título, corpo) de cada notificação.
+type sentNotice struct{ title, body string }
+
+var sent []sentNotice
+
+func TestMain(m *testing.M) {
+	spy := func(title, body string) {
+		sent = append(sent, sentNotice{title, body})
+	}
+	notifySend, notifyAlarm = spy, spy
+	os.Exit(m.Run())
+}
 
 type recorded struct {
 	eventType string

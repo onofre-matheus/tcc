@@ -8,6 +8,16 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/onofre-matheus/tcc/cli/internal/notify"
+)
+
+// Quando o cronômetro toca, quem precisa ouvir pode estar em outra janela: o
+// aviso sai como notificação de desktop, não como sino de terminal. Os
+// disparos não bloqueiam (ver notify), então podem ser chamados de dentro do
+// Update; a indireção existe para os testes não acordarem o desktop.
+var (
+	notifySend  = notify.Send
+	notifyAlarm = notify.Alarm
 )
 
 type tickMsg struct{}

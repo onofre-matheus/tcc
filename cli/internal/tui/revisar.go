@@ -65,6 +65,7 @@ type Revisar struct {
 	cfg            RevisarConfig
 	phase          revisarPhase
 	timer          countdown
+	width          int // largura do terminal (0 = ainda desconhecida)
 	idx            int
 	pauseID        string
 	input          textinput.Model
@@ -109,6 +110,10 @@ func (m Revisar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Err = msg.err
 		return m, tea.Quit
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		return m, nil
+
 	case tickMsg:
 		if m.phase == reasonPhase {
 			return m, tick() // o relógio não apressa a resposta
@@ -120,6 +125,7 @@ func (m Revisar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.endPause(); err != nil {
 				m.Err = err
 			}
+			notifyAlarm("Fim da pausa", "descanso encerrado — de volta ao trabalho")
 			return m, tea.Quit // fim da pausa
 		}
 		// o timer tocou no meio da revisão: a sessão vai até aqui (RF11)
@@ -128,6 +134,10 @@ func (m Revisar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			next.Err = err
 			return next, tea.Quit
 		}
+		notifyAlarm(
+			fmt.Sprintf("%d min de revisão concluídos 🐘", m.cfg.Minutes),
+			fmt.Sprintf("pausa de %d min começou", m.cfg.PauseMinutes),
+		)
 		return next, tick()
 
 	case tea.KeyMsg:
@@ -352,7 +362,7 @@ func (m Revisar) View() string {
 	if m.phase == reviewPause {
 		done := m.Correct + m.Wrong
 		summary := []string{fmt.Sprintf("%d cartão(ões) revisado(s) · %d acerto(s) · %d erro(s)", done, m.Correct, m.Wrong)}
-		return pauseView("revisão concluída · 🐘 mandou bem!", m.timer, summary, "[q] sair")
+		return pauseView("revisão concluída · 🐘 mandou bem!", m.timer, summary, "[q] sair", m.width)
 	}
 	if m.phase == reasonPhase {
 		var b strings.Builder

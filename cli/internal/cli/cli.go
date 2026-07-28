@@ -41,6 +41,7 @@ func NewRoot(a *app.App) *cobra.Command {
 		newPausaCmd(a),
 		newVoltaCmd(a),
 		newSemanaCmd(a),
+		newSyncCmd(a),
 		newProcrastinaCmd(a),
 	)
 	return root

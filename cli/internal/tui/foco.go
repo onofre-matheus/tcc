@@ -51,6 +51,7 @@ type Foco struct {
 	pauseID      string
 	pauseHead    string // cabeçalho da tela verde (recompensa ≠ break)
 	timer        countdown
+	width        int // largura do terminal (0 = ainda desconhecida)
 	elapsedSec   int // segundos corridos da sessão (agenda os check-ins)
 	input        textinput.Model
 	Distractions int
@@ -121,6 +122,10 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Err = msg.err
 		return m, tea.Quit
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		return m, nil
+
 	case tickMsg:
 		if m.phase == focoReason {
 			return m, tick() // o relógio não apressa a resposta
@@ -130,12 +135,12 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !m.timer.tick() {
 			// A cada checkin_every minutos corridos, a pergunta toma a linha
-			// (com sino); check-in não respondido simplesmente dá lugar ao
-			// próximo — nenhum evento é gravado.
+			// (e sai também como notificação); check-in não respondido
+			// simplesmente dá lugar ao próximo — nenhum evento é gravado.
 			if m.phase == focoRunning && m.cfg.CheckinEvery > 0 &&
 				m.elapsedSec%(m.cfg.CheckinEvery*60) == 0 {
 				m.phase = focoCheckin
-				fmt.Print("\a") // sino do terminal
+				notifySend("Check-in de atenção", m.checkinQuestion())
 			}
 			return m, tick()
 		}
@@ -143,6 +148,7 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.endPause(); err != nil {
 				m.Err = err
 			}
+			notifyAlarm("Fim da pausa", "descanso encerrado — de volta ao foco")
 			return m, tea.Quit // fim da pausa → volta ao azul
 		}
 		if err := m.emitEnded("completed", ""); err != nil {
@@ -156,6 +162,10 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.phase = focoPaused
 		m.pauseHead = fmt.Sprintf("%d min de foco · 🐘 mandou bem!", m.cfg.Minutes)
 		m.timer = newCountdown(m.cfg.PauseMinutes)
+		notifyAlarm(
+			fmt.Sprintf("%d min de foco concluídos 🐘", m.cfg.Minutes),
+			fmt.Sprintf("pausa de %d min começou", m.cfg.PauseMinutes),
+		)
 		return m, tick()
 
 	case tea.KeyMsg:
@@ -372,6 +382,15 @@ func (m *Foco) endPause() error {
 	return m.cfg.Emit("pause.ended", map[string]any{"pause_id": id})
 }
 
+// checkinQuestion é a pergunta do self-monitoring — a mesma na tela e na
+// notificação, para quem responde de volta no terminal reconhecê-la.
+func (m Foco) checkinQuestion() string {
+	if m.cfg.TaskTitle != "" {
+		return fmt.Sprintf("Você está na tarefa %q?", m.cfg.TaskTitle)
+	}
+	return "Você está na tarefa?"
+}
+
 func (m Foco) View() string {
 	if m.Err != nil {
 		return ""
@@ -388,7 +407,7 @@ func (m Foco) View() string {
 		if head == "" {
 			head = fmt.Sprintf("%d min de foco · 🐘 mandou bem!", m.cfg.Minutes)
 		}
-		return pauseView(head, m.timer, summary, "[Enter] novo foco · [t] triagem · [q] sair")
+		return pauseView(head, m.timer, summary, "[Enter] novo foco · [t] triagem · [q] sair", m.width)
 	}
 	if m.phase == focoReason {
 		var b strings.Builder
@@ -406,15 +425,11 @@ func (m Foco) View() string {
 	var b strings.Builder
 	b.WriteString(redTitle.Render(title))
 	b.WriteString("\n\n")
-	b.WriteString("        " + redTimer.Render("▐█  "+m.timer.clock()+"  █▌"))
+	b.WriteString(bigClock(m.timer, "FOCO", redTimer, m.width))
 	b.WriteString("\n\n")
 	switch m.phase {
 	case focoCheckin:
-		question := "Você está na tarefa?"
-		if m.cfg.TaskTitle != "" {
-			question = fmt.Sprintf("Você está na tarefa %q?", m.cfg.TaskTitle)
-		}
-		b.WriteString(" 🔔 " + question + "\n")
+		b.WriteString(" 🔔 " + m.checkinQuestion() + "\n")
 		b.WriteString(" " + dim.Render("[s] sim, na tarefa · [n] não, distraí · Esc pula") + "\n")
 	case focoBreak:
 		b.WriteString(" ☕ Pausa de quantos minutos? " + dim.Render("(encerra a sessão)") + "\n")
