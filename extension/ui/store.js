@@ -6,6 +6,9 @@
 import { EventLog } from "../storage/log.js";
 import { chromeArea } from "../storage/kv.js";
 import { uuidv7 } from "../storage/id.js";
+import { sync } from "../storage/sync.js";
+import { s3Bucket } from "../storage/s3.js";
+import { loadSyncConfig } from "../storage/sync_config.js";
 
 import { project as leitner } from "../core/leitner.js";
 import { project as tasks } from "../core/tasks.js";
@@ -205,6 +208,38 @@ export const endPause = (pause_id) => log.append("pause.ended", { pause_id });
 // Retroativa ("esqueci de apertar o botão"): tempo do domínio no payload.
 export const logPause = (starts_at, ends_at) =>
   log.append("pause.logged", { pause_id: id("p"), starts_at, ends_at });
+
+// --- Sincronização (SPEC §5) ---
+// Extensão e CLI são, para o bucket, dois dispositivos quaisquer: cada uma
+// escreve só o próprio objeto e lê os dos outros. O estado do último ciclo
+// fica guardado para a UI mostrar sem precisar sincronizar de novo.
+export const SYNC_STATUS_KEY = "sync_status";
+
+export async function syncNow() {
+  const config = await loadSyncConfig();
+  const result = await sync(log, s3Bucket(config), config.prefix);
+  await chrome.storage.local.set({
+    [SYNC_STATUS_KEY]: { at: new Date().toISOString(), ok: true, ...result },
+  });
+  return result;
+}
+
+// Variante para o service worker: nunca lança. Sync é oportunista — o
+// navegador pode estar offline, a política pode não ter chegado ainda — e uma
+// exceção não tratada no alarme só polui o console.
+export async function syncQuietly() {
+  try {
+    return await syncNow();
+  } catch (error) {
+    await chrome.storage.local.set({
+      [SYNC_STATUS_KEY]: { at: new Date().toISOString(), ok: false, error: String(error.message ?? error) },
+    });
+    return null;
+  }
+}
+
+export const syncStatus = async () =>
+  (await chrome.storage.local.get(SYNC_STATUS_KEY))[SYNC_STATUS_KEY] ?? null;
 
 // --- Reatividade entre contextos ---
 // Qualquer append altera a chave "events"; assim popup e side panel se

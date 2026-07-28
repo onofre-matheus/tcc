@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "description": "Assistente de consistência nos estudos: calendário, tarefas A/B/C, flashcards (Leitner) e captura rápida — tudo local, com sincronização.",
   "permissions": ["storage", "contextMenus", "sidePanel", "alarms", "notifications"],
+  "host_permissions": ["https://*.amazonaws.com/*"],
+  "storage": { "managed_schema": "schema.json" },
   "icons": { "128": "icons/icon128.png" },
   "background": {
     "service_worker": "background.js",

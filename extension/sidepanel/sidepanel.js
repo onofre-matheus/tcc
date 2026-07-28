@@ -1,6 +1,7 @@
 import * as store from "../ui/store.js";
 import { MASCOT_SVG } from "../ui/mascot.js";
 import { mountDebugBar } from "../ui/debug.js";
+import { mountSyncPanel } from "../ui/sync-panel.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -628,4 +629,5 @@ async function refresh() {
 
 store.onChange(refresh);
 mountDebugBar(document.getElementById("debugBar"));
+mountSyncPanel(document.getElementById("syncPanel"));
 store.ready.then(refresh).then(restoreActiveSession);

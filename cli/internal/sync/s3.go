@@ -27,8 +27,18 @@ type Config struct {
 	Region   string // PNN_S3_REGION (padrão AWS_REGION, ou us-east-1)
 }
 
-var ErrNotConfigured = errors.New(
-	"sync não configurado — defina PNN_S3_BUCKET (e as credenciais AWS)")
+// defaultRegion é o último recurso: nem PNN_S3_REGION nem a cadeia da AWS
+// disseram nada. Serviços compatíveis costumam aceitar qualquer região.
+const defaultRegion = "us-east-1"
+
+var (
+	ErrNotConfigured = errors.New(
+		"sync não configurado — defina PNN_S3_BUCKET (e as credenciais AWS)")
+
+	ErrNoCredentials = errors.New(
+		"credenciais AWS não encontradas — defina AWS_ACCESS_KEY_ID e " +
+			"AWS_SECRET_ACCESS_KEY, ou AWS_PROFILE apontando para ~/.aws/credentials")
+)
 
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
@@ -46,11 +56,10 @@ func ConfigFromEnv() (Config, error) {
 	if !strings.HasSuffix(cfg.Prefix, "/") {
 		cfg.Prefix += "/"
 	}
-	if cfg.Region == "" {
-		if cfg.Region = os.Getenv("AWS_REGION"); cfg.Region == "" {
-			cfg.Region = "us-east-1"
-		}
-	}
+	// Região fica vazia de propósito quando não há PNN_S3_REGION: quem resolve
+	// é a cadeia da AWS (AWS_REGION, AWS_DEFAULT_REGION, região do perfil em
+	// ~/.aws/config). Fixar um padrão aqui atropelaria o perfil e assinaria na
+	// região errada — falha que só aparece como SignatureDoesNotMatch.
 	return cfg, nil
 }
 
@@ -66,12 +75,23 @@ func NewBucket(ctx context.Context, cfg Config) (Bucket, error) {
 	// O logger do SDK vai para o lixo: ele avisa coisas como "resposta sem
 	// checksum" (comum em serviços compatíveis) direto no terminal, no meio da
 	// saída do comando. Erro de verdade sobe pelo retorno, não pelo log.
-	aws0, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(cfg.Region),
-		config.WithLogger(logging.Nop{}),
-	)
+	opts := []func(*config.LoadOptions) error{config.WithLogger(logging.Nop{})}
+	if cfg.Region != "" {
+		opts = append(opts, config.WithRegion(cfg.Region))
+	}
+	aws0, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("credenciais AWS: %w", err)
+		return nil, fmt.Errorf("configuração AWS: %w", err)
+	}
+	if aws0.Region == "" {
+		aws0.Region = defaultRegion // nem PNN_S3_REGION nem a cadeia disseram
+	}
+
+	// Checagem adiantada: sem isso, credencial ausente vira um parágrafo sobre
+	// EC2 IMDS no meio de "listar o bucket". Com chave provisionada por fora,
+	// esta é a falha mais provável — merece uma frase que diga o que fazer.
+	if _, err := aws0.Credentials.Retrieve(ctx); err != nil {
+		return nil, ErrNoCredentials
 	}
 	client := s3.NewFromConfig(aws0, func(o *s3.Options) {
 		if cfg.Endpoint != "" {

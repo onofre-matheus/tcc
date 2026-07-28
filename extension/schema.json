@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Configuração do sync do Procrastina Não",
+  "description": "Provisionamento por política do navegador. No Linux, grave um JSON com estes campos em /etc/opt/chrome/policy/managed/procrastina-nao.json, sob a chave da extensão em \"3rdparty.extensions.<id>\". Nada aqui é versionado no repositório.",
+  "type": "object",
+  "properties": {
+    "bucket": {
+      "title": "Nome do bucket S3",
+      "type": "string"
+    },
+    "prefix": {
+      "title": "Prefixo das chaves (padrão pnn/)",
+      "type": "string"
+    },
+    "endpoint": {
+      "title": "Endpoint alternativo, para serviços compatíveis (R2, MinIO, Backblaze)",
+      "type": "string"
+    },
+    "region": {
+      "title": "Região da AWS (padrão us-east-1)",
+      "type": "string"
+    },
+    "accessKeyId": {
+      "title": "AWS_ACCESS_KEY_ID",
+      "type": "string"
+    },
+    "secretAccessKey": {
+      "title": "AWS_SECRET_ACCESS_KEY",
+      "type": "string"
+    },
+    "sessionToken": {
+      "title": "AWS_SESSION_TOKEN, quando a credencial for temporária (STS)",
+      "type": "string"
+    }
+  }
+}

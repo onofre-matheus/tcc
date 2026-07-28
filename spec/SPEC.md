@@ -351,9 +351,42 @@ perdido ou errado, o pior que acontece é rebaixar o que já se tem, e o dedup
 absorve. Com o log local vazio ele é descartado de propósito, senão uma réplica
 recém-restaurada acharia que está em dia e ficaria vazia para sempre.
 
-Credenciais seguem a cadeia padrão da AWS; o cliente é configurado por
-`PNN_S3_BUCKET`, `PNN_S3_PREFIX`, `PNN_S3_ENDPOINT` (opcional, para R2/MinIO/
-Backblaze) e `PNN_S3_REGION`. Nenhum segredo é gravado em `~/.pnn`.
+### Credenciais
+
+Em ambos os clientes a chave é **provisionada de fora** e nunca versionada — o
+repositório é público, e chave AWS em repositório público é encontrada por
+varredura automática.
+
+- **CLI**: cadeia padrão da AWS (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`,
+  `~/.aws/credentials`, `AWS_PROFILE`), inclusive credencial temporária do STS
+  com `AWS_SESSION_TOKEN`. Configuração por `PNN_S3_BUCKET`, `PNN_S3_PREFIX`,
+  `PNN_S3_ENDPOINT` (opcional, para R2/MinIO/Backblaze) e `PNN_S3_REGION`.
+  Sem `PNN_S3_REGION`, a **região é resolvida pela cadeia da AWS** (`AWS_REGION`,
+  `AWS_DEFAULT_REGION`, região do perfil) — fixar um padrão atropelaria o perfil
+  e assinaria na região errada, falha que só aparece como `SignatureDoesNotMatch`.
+- **Extensão**: cadeia equivalente — `chrome.storage.managed` (política do
+  navegador, o provisionamento automático) e `chrome.storage.local`, que
+  sobrepõe, como o ambiente sobrepõe o perfil na CLI. Esquema em
+  `extension/schema.json`. Nenhum segredo é gravado em `~/.pnn` nem no código.
+
+A extensão assina as requisições com **SigV4 implementado sobre Web Crypto**
+(`extension/storage/sigv4.js`): sem bundler, trazer o SDK custaria um passo de
+build e centenas de kB para três operações. A conformidade é travada por
+vetores gerados pelo signer oficial do SDK Go (`test/sigv4_vectors.json`) —
+mesma assinatura, byte a byte. Só `host` e `x-amz-*` são assinados;
+`content-length` fica de fora porque o `fetch` do navegador proíbe defini-lo,
+que é o que o SDK oficial de JavaScript também faz no navegador.
+
+O `ListObjectsV2` é lido sem `DOMParser`: o service worker do Manifest V3 não
+tem DOM.
+
+### Política de acesso recomendada
+
+`s3:GetObject`, `s3:PutObject` e `s3:ListBucket` restritos ao prefixo, **sem
+`s3:DeleteObject`**, e versionamento ligado no bucket. Como o `device` nasce em
+tempo de execução, a política não tem como se restringir a um único objeto —
+então o que limita o estrago de uma chave vazada é não poder apagar, e o
+versionamento tornar recuperável até a sobrescrita.
 
 ## 6. Formato dos vetores de conformidade
 

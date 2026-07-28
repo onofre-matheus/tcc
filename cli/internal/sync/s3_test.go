@@ -5,6 +5,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,7 +138,6 @@ func TestConfigFromEnvExigeBucketENormalizaPrefixo(t *testing.T) {
 	t.Setenv("PNN_S3_BUCKET", "meu-bucket")
 	t.Setenv("PNN_S3_PREFIX", "estudos")
 	t.Setenv("PNN_S3_REGION", "")
-	t.Setenv("AWS_REGION", "")
 
 	cfg, err := ConfigFromEnv()
 	if err != nil {
@@ -146,7 +146,27 @@ func TestConfigFromEnvExigeBucketENormalizaPrefixo(t *testing.T) {
 	if cfg.Prefix != "estudos/" {
 		t.Fatalf("o prefixo precisa da barra para não colar na chave: %q", cfg.Prefix)
 	}
-	if cfg.Region == "" {
-		t.Fatal("região precisa de padrão — o SDK recusa vazio")
+	// Sem PNN_S3_REGION a região tem de ficar vazia para a cadeia da AWS
+	// resolver (perfil, AWS_DEFAULT_REGION); fixar aqui assinaria errado.
+	if cfg.Region != "" {
+		t.Fatalf("região não configurada deveria ficar para a cadeia da AWS, veio %q", cfg.Region)
+	}
+}
+
+// Credencial ausente é a falha mais provável quando a chave é provisionada por
+// fora: tem de sair uma frase acionável, não o parágrafo do SDK sobre IMDS.
+func TestSemCredencialDizOQueFazer(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", t.TempDir()+"/inexistente")
+	t.Setenv("AWS_CONFIG_FILE", t.TempDir()+"/inexistente")
+
+	_, err := NewBucket(context.Background(), Config{Bucket: "meu-bucket", Prefix: "pnn/"})
+	if !errors.Is(err, ErrNoCredentials) {
+		t.Fatalf("esperava ErrNoCredentials, veio %v", err)
+	}
+	if strings.Contains(err.Error(), "IMDS") {
+		t.Fatalf("a mensagem não deveria vazar jargão do SDK: %v", err)
 	}
 }

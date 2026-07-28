@@ -1,0 +1,56 @@
+[
+  {
+    "name": "list",
+    "method": "GET",
+    "url": "https://meu-bucket.s3.sa-east-1.amazonaws.com/?list-type=2\u0026prefix=pnn%2F",
+    "body": "",
+    "region": "sa-east-1",
+    "token": "",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/sa-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=e620bb31afcd41e9349bd5e5583a61b668ec1a1e996fac2074c2862948f03a33"
+  },
+  {
+    "name": "get",
+    "method": "GET",
+    "url": "https://meu-bucket.s3.us-east-1.amazonaws.com/pnn/dev-a.jsonl",
+    "body": "",
+    "region": "us-east-1",
+    "token": "",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=2cc2ba03be2c7edc03e575de6b1b069bc53b3b431ea9399bc85e795e2abf102e"
+  },
+  {
+    "name": "put",
+    "method": "PUT",
+    "url": "https://meu-bucket.s3.eu-west-1.amazonaws.com/pnn/dev-b.jsonl",
+    "body": "{\"id\":\"e1\"}\n",
+    "region": "eu-west-1",
+    "token": "",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/eu-west-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=38cd53c06b9b8251ab0baa0be2e87c1dea3f953ca2564e99dae56b2137d75dca"
+  },
+  {
+    "name": "endpoint-proprio",
+    "method": "PUT",
+    "url": "http://127.0.0.1:9111/meu-bucket/pnn/dev-c.jsonl",
+    "body": "linha\n",
+    "region": "us-east-1",
+    "token": "",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=c9abb44793726270b72bf4067b74f1930a4c0e17004d0c213746d126fe2f3c57"
+  },
+  {
+    "name": "com-token-sts",
+    "method": "GET",
+    "url": "https://meu-bucket.s3.us-east-1.amazonaws.com/pnn/dev-a.jsonl",
+    "body": "",
+    "region": "us-east-1",
+    "token": "token-temporario-abc",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=dc09e0f688cb3986ef83cb5a5da6f16d7582725f8be6eba625c8a3524ae7694f"
+  },
+  {
+    "name": "chave-com-espaco",
+    "method": "GET",
+    "url": "https://meu-bucket.s3.us-east-1.amazonaws.com/pnn/dev%20a%2Bb.jsonl",
+    "body": "",
+    "region": "us-east-1",
+    "token": "",
+    "expect": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260728/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=e71277d040c0deb97371169f2ce16565bed3a2ad42e929ebd859acf34f0fe467"
+  }
+]

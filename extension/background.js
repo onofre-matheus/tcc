@@ -11,11 +11,29 @@
 //   notificação chega com o painel fechado ou minimizado. É ele quem grava o
 //   session.ended nesse caso; o painel, aberto, apenas espelha o fim.
 
-import { captureNote, logCheckin, endSession, log, ready, state } from "./ui/store.js";
+import { captureNote, logCheckin, endSession, log, ready, state, syncNow, syncQuietly } from "./ui/store.js";
 import { dueReminders, reminderOffsets } from "./core/calendar.js";
+import { loadSyncConfig, CONFIG_KEY } from "./storage/sync_config.js";
 
 const MENU_CAPTURE = "capture-selection";
 const MENU_PALACE = "open-palace";
+
+// Sync periódico: é o que faz "o que eu fizer num lado aparecer no outro" sem
+// ninguém apertar nada. Oportunista — offline ou sem configuração, falha em
+// silêncio e tenta de novo no próximo tique (ver syncQuietly).
+const SYNC_ALARM = "pnn-sync";
+const SYNC_PERIOD_MINUTES = 15;
+
+// Atalhos para o console do service worker (chrome://extensions → "service
+// worker"): configurar a chave e disparar um ciclo à mão sem esperar o alarme.
+//   await pnn.configurar({ bucket: "…", region: "…", accessKeyId: "…", secretAccessKey: "…" })
+//   await pnn.sync()
+//   await pnn.config()
+globalThis.pnn = {
+  sync: () => syncNow(),
+  config: () => loadSyncConfig(),
+  configurar: (config) => chrome.storage.local.set({ [CONFIG_KEY]: config }),
+};
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
@@ -31,12 +49,18 @@ chrome.runtime.onInstalled.addListener(() => {
     });
   });
   syncAppointmentReminders();
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
 });
 
 // Rearma o alarme da agenda ao abrir o navegador (o service worker pode ter
 // sido descarregado) e sempre que o log de eventos muda — assim um compromisso
 // recém-criado no popup já entra na fila de lembretes sem precisar reabri-lo.
-chrome.runtime.onStartup.addListener(() => syncAppointmentReminders());
+chrome.runtime.onStartup.addListener(() => {
+  syncAppointmentReminders();
+  // O alarme periódico não sobrevive a todo reinício; rearmar é barato.
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
+  syncQuietly(); // pega no ar o que os outros dispositivos fizeram enquanto isso
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.events) syncAppointmentReminders();
 });
@@ -129,6 +153,11 @@ async function syncAppointmentReminders() {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === APPT_ALARM) {
     await syncAppointmentReminders();
+    return;
+  }
+
+  if (alarm.name === SYNC_ALARM) {
+    await syncQuietly();
     return;
   }
 

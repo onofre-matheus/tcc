@@ -5,6 +5,12 @@ node_modules/
 .env
 .notes/
 
+# Credenciais do sync — o repositório é público; chave AWS aqui é encontrada
+# por varredura automática em minutos.
+*.reg
+sync.local.json
+**/sync_config.local.json
+
 
 # Legado (fora do escopo do TCC atual, mantido apenas no disco)
 backend/
