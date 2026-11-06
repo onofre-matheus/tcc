@@ -1,0 +1,34 @@
+{
+  "name": "study.saved cria ou substitui a sessão inteira (último vence); study.deleted é tombstone (o salvar posterior é ignorado); tags normalizadas e renomeadas, around normalizado e renomeado (chave inválida fica como veio); nome vazio é ignorado; ordem por nome",
+  "projection": "studies",
+  "now": "2026-07-02T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "study.saved", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "study_id": "s1", "name": " Véspera P2 ", "tags": ["#Prova-P2", "so", "so"], "around": ["tag:#SO/Threads", "card:c1", "note:n1"], "practice": true } },
+    { "id": "evt-02", "type": "study.saved", "v": 1, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "study_id": "s2", "name": "Redes", "decks": ["d3"] } },
+    { "id": "evt-03", "type": "study.saved", "v": 1, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "study_id": "s3", "name": "Antiga", "tags": ["x"] } },
+    { "id": "evt-04", "type": "tag.renamed", "v": 1, "lc": 4, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "from": "so", "to": "sistemas" } },
+    { "id": "evt-05", "type": "study.saved", "v": 1, "lc": 5, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "study_id": "s2", "name": "Redes de computadores", "decks": ["d3", " ", "d3"], "tags": ["OSI"] } },
+    { "id": "evt-06", "type": "study.deleted", "v": 1, "lc": 6, "ts": "2026-07-01T12:01:00Z", "device": "dev-a",
+      "payload": { "study_id": "s3" } },
+    { "id": "evt-07", "type": "study.saved", "v": 1, "lc": 7, "ts": "2026-07-01T12:02:00Z", "device": "dev-a",
+      "payload": { "study_id": "s3", "name": "Volta?" } },
+    { "id": "evt-08", "type": "study.deleted", "v": 1, "lc": 8, "ts": "2026-07-01T12:03:00Z", "device": "dev-a",
+      "payload": { "study_id": "s9" } },
+    { "id": "evt-09", "type": "study.saved", "v": 1, "lc": 9, "ts": "2026-07-01T12:04:00Z", "device": "dev-a",
+      "payload": { "study_id": "s4", "name": "   ", "tags": ["y"] } }
+  ],
+  "expected": {
+    "studies": {
+      "s1": { "name": "Véspera P2", "decks": [], "tags": ["prova-p2", "sistemas"], "around": ["tag:sistemas/threads", "card:c1", "note:n1"], "practice": true },
+      "s2": { "name": "Redes de computadores", "decks": ["d3"], "tags": ["osi"], "around": [], "practice": false }
+    },
+    "order": ["s2", "s1"]
+  }
+}

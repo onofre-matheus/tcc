@@ -59,6 +59,40 @@ func TagUnder(tag, prefix string) bool {
 	return tag == prefix || strings.HasPrefix(tag, prefix+"/")
 }
 
+// RenameTag aplica um tag.renamed a uma tag (spec §3, Conexões e renomeação
+// de tag): from e as descendentes viram to ("so/x" → "sistemas/x"); as
+// demais ficam como estão ("sobre" não é descendente de "so").
+func RenameTag(tag, from, to string) string {
+	if !TagUnder(tag, from) {
+		return tag
+	}
+	return to + tag[len(from):]
+}
+
+// renameTags renomeia a lista e deduplica — renomear para uma tag que o item
+// já tem funde as duas.
+func renameTags(tags []string, from, to string) []string {
+	out := make([]string, len(tags))
+	for i, tag := range tags {
+		out[i] = RenameTag(tag, from, to)
+	}
+	return NormalizeTags(out)
+}
+
+// decodeRename lê um tag.renamed com os dois nomes normalizados; ok=false
+// quando o evento deve ser ignorado (nome vazio ou de-para iguais).
+func decodeRename(event Event) (from, to string, ok bool, err error) {
+	pl, err := decodePayload[struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}](event)
+	if err != nil {
+		return "", "", false, err
+	}
+	from, to = NormalizeTag(pl.From), NormalizeTag(pl.To)
+	return from, to, from != "" && to != "" && from != to, nil
+}
+
 // activeCard: não arquivado e de deck não arquivado (cartão sem deck nunca
 // está em deck arquivado). É o universo das projeções de tags e de estudo.
 func activeCard(card LeitnerCard, decks DecksState) bool {

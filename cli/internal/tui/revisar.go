@@ -23,6 +23,10 @@ type Card struct {
 	LastFrame       string // andaime da explicação anterior (default "feynman")
 	Box             int
 	Tags            []string // tags efetivas, só para exibição
+	// Links descreve as conexões do cartão, uma por vizinho ("→ #so
+	// (prerequisito)"); aparecem depois do verso, para elaborar, não para
+	// dar pista antes da resposta.
+	Links []string
 	// Practice marca o cartão de treino (não vencido, modo --treino): a
 	// resposta vira card.practiced, que não mexe na caixa (spec §4.11).
 	Practice bool
@@ -436,6 +440,9 @@ func (m Revisar) View() string {
 			label = *card.SourceTitle
 		}
 		b.WriteString(" " + dim.Render("fonte: ") + hyperlink(*card.SourceURL, label) + "\n")
+	}
+	if len(card.Links) > 0 {
+		b.WriteString(" " + dim.Render("🔗 conectado a: ") + strings.Join(card.Links, dim.Render(" · ")) + "\n")
 	}
 	if card.LastExplanation != nil && *card.LastExplanation != "" {
 		label := "Sua explicação anterior"

@@ -43,13 +43,15 @@ estado projetado (**convergência**), e eventos duplicados não alteram o
 resultado (**idempotência**). Vetores com `"permutations": true` verificam isso
 embaralhando a entrada.
 
-## 3. Catálogo de eventos (v1.3)
+## 3. Catálogo de eventos (v1.5)
 
 O catálogo 1.1 acrescentou ao 1.0 os eventos de **edição e arquivamento**; o
 1.2, **pausas e o motivo de interrupção** (marcados ▸ nas tabelas;
 `session.ended` ganhou v2 de payload); o 1.3 acrescenta **tags livres, cartão
 sem deck e treino fora do vencimento** (marcados "(1.3)"; `card.created`
-ganhou v2 de payload). As adições são compatíveis —
+ganhou v2 de payload); o 1.4, **conexões explícitas e renomeação de tag**
+(marcados "(1.4)"); o 1.5, **sessões de estudo salvas** (marcados "(1.5)").
+As adições são compatíveis —
 clientes antigos continuam válidos: **tipos de evento desconhecidos são
 ignorados pelas projeções**, sem interromper o processamento (vetor
 `envelope_tipo_desconhecido_ignorado`), e campos novos opcionais são
@@ -136,6 +138,72 @@ cada pedaço é normalizado (`#SO #Prova-P2, redes` → `so`, `prova-p2`,
 **Tags efetivas** de um cartão = as dele ∪ as do próprio deck (nessa ordem,
 deduplicadas). **Hierarquia**: a tag `t` **inclui** `u` se `u == t` ou `u`
 começa com `t + "/"` (`so` inclui `so/concorrencia`, não `sobre`).
+
+### Conexões e renomeação de tag (1.4)
+
+| Tipo | Payload |
+|---|---|
+| `link.created` (1.4) | `link_id, from: {kind, id}, to: {kind, id}, relation?` |
+| `link.removed` (1.4) | `link_id` |
+| `tag.renamed` (1.4) | `from, to` |
+
+**Conexão** é uma aresta explícita entre dois **nós**, criada pelo usuário — o
+`[[link]]` do Obsidian como evento: o texto do cartão não é varrido em busca
+de links. Nó = `{kind, id}` com `kind ∈ card | deck | tag`; o `id` da tag é o
+nome normalizado (é por isso que a tag não tem `tag_id`). Na saída das
+projeções o nó vira a chave `"kind:id"` (`card:c1`, `deck:d1`,
+`tag:so/threads`).
+
+- A aresta guarda a direção (`from → to`) porque `relation` pode ser
+  direcional (`prerequisito`: *from* é pré-requisito de *to*); a vizinhança é
+  não direcionada. `relation` é **aberto**, como o `frame` do
+  `card.explained`; ausente = conexão simples.
+- `link.created` é **ignorado** se algum nó for inválido: `kind` desconhecido
+  (um tipo de nó novo entra como `kind` novo, e clientes antigos o ignoram),
+  `id` vazio (inclusive tag que normaliza para vazia), cartão ou deck
+  inexistente naquela posição da ordem total (§3: referência a id
+  inexistente); tag sempre existe. Laço (`from` = `to`) também é ignorado.
+- `link.removed` é **tombstone** da conexão. Duas conexões do mesmo par
+  (criadas em dispositivos diferentes) são arestas distintas — remover uma não
+  remove a outra, então a superfície, ao "desligar" dois nós, remove todas as
+  do par.
+- Arquivar cartão ou deck não remove conexões (a história fica); quem exibe
+  decide se mostra.
+
+**Renomear tag** (`tag.renamed`): sem `tag_id`, renomear é um evento próprio.
+Vale **na posição do evento na ordem total**: toda ocorrência anterior de
+`from` — e das descendentes, `from/x` → `to/x`, como no Obsidian — é reescrita
+para `to` nas tags dos cartões, nas tags dos decks e nas pontas das conexões,
+e as listas são deduplicadas (renomear para uma tag existente funde as duas).
+Ocorrência **posterior** de `from` é uma tag nova com o nome antigo — o nome
+fica livre para reúso. `from` e `to` são normalizados; vazios ou iguais, o
+evento é ignorado. Conexão cujas duas pontas viram o mesmo nó deixa de valer.
+
+Um dispositivo que ainda não viu a renomeação e grava `from` depois dela na
+ordem total reintroduz o nome antigo: é a semântica honesta do livro-razão
+(renomear de novo resolve), preferida a um apelido eterno que impediria
+reusar o nome.
+
+### Sessões salvas (1.5)
+
+| Tipo | Payload |
+|---|---|
+| `study.saved` (1.5) | `study_id, name, decks?: [deck_id], tags?: [tag], around?: [nó], practice?: bool` |
+| `study.deleted` (1.5) | `study_id` |
+
+A sessão personalizada (§4.11) salva com um nome — como os *decks filtrados*
+do Anki, mas guardando o **filtro**, não a lista de cartões: reaberta, a
+sessão reúne o que casar naquele dia. `practice` pede o modo treino por
+padrão.
+
+- `study.saved` **cria ou substitui a sessão inteira**: salvar de novo com o
+  mesmo `study_id` é a edição, e o último vence. Não há LWW por campo porque o
+  filtro só faz sentido inteiro. `name` é aparado; vazio, o evento é ignorado.
+- `study.deleted` é **tombstone**: a sessão sai do estado e eventos
+  posteriores sobre o mesmo id são ignorados.
+- As tags do filtro e os nós de tag do `around` **acompanham `tag.renamed`**,
+  como as demais tags — senão a sessão "Véspera da P2" esvaziaria em silêncio
+  ao renomear `#p2`.
 
 ### Captura e triagem
 
@@ -233,6 +301,8 @@ data civil desse instante no fuso `tz`.
 - `card.practiced` é ignorado (treino não altera caixa nem `due`).
 - `card.edited`: sobrescreve apenas os campos presentes (`front`, `back`,
   `tags`), last-writer-wins por campo; **não altera caixa nem `due`**.
+- `tag.renamed` reescreve as tags dos cartões já criados (§3, Conexões e
+  renomeação de tag).
 - `card.archived` → `archived: true`; `deck.archived` exclui da fila os
   cartões do deck sem alterar o `archived` individual de cada um.
 - **Vencido**: `due <= hoje`, onde `hoje` = data local de `now`.
@@ -283,7 +353,8 @@ Saída: `{ days_studied, streak, reviews_today }`.
 
 ### 4.5 Decks (`projection: "decks"`)
 
-- Cada `deck.created` projeta nome e tags (transversais, normalizadas).
+- Cada `deck.created` projeta nome e tags (transversais, normalizadas);
+  `tag.renamed` as reescreve como nos cartões.
 - `deck.renamed`: o último nome emitido vence (ordem total).
 - `deck.archived` → `archived: true` (nome e tags preservados).
 
@@ -381,7 +452,8 @@ Saída: `{ tags: { <tag>: { cards, due } }, names: [tag…] }`.
 
 ### 4.11 Sessão personalizada (`projection: "study"`)
 
-Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]` e `tags?: [tag]`.
+Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]`, `tags?: [tag]` e
+`around?: [nó]` (1.4, nós como `"kind:id"`).
 
 - **Deck**: o cartão casa se o seu `deck_id` estiver na **subárvore `::`** de
   algum deck listado (o próprio ou nome que começa com `nome + "::"`). Deck
@@ -389,6 +461,12 @@ Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]` e `tags?: [tag]`.
 - **Tag**: o cartão casa se alguma tag efetiva for **incluída** por alguma
   tag do filtro (§3: própria ou descendente `/`). As tags do filtro são
   normalizadas (`#SO` ≡ `so`).
+- **Ao redor** (1.4): a vizinhança de um nó X é X mais os vizinhos (§4.12) de
+  todo nó que X **inclui** — o próprio cartão; a própria tag e as descendentes
+  `/`; o próprio deck e a subárvore `::`. O cartão casa se algum nó da
+  vizinhança o incluir (cartão: ele mesmo; tag: alguma tag efetiva; deck: o
+  deck do cartão na subárvore). Um salto só — vizinho de vizinho não entra.
+  O `id` de tag é normalizado; nó inválido não casa nada.
 - **Combinação**: OU dentro de cada lista, **E entre** as listas; lista vazia
   (ou ausente) não restringe.
 - `queue` = a fila Leitner (§4.1) filtrada, **na mesma ordem**.
@@ -397,6 +475,58 @@ Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]` e `tags?: [tag]`.
   apresenta depois da fila, e a resposta vira `card.practiced`.
 
 Saída: `{ queue: [card_id…], practice: [card_id…] }`.
+
+### 4.12 Conexões (`projection: "links"`)
+
+- `links` = as conexões válidas e não removidas (§3, Conexões), com as pontas
+  já renomeadas, escritas como `"kind:id"`, e `relation` (`null` quando
+  ausente). Conexão que virou laço por renomeação não aparece.
+- `neighbors` = para cada nó com ao menos uma conexão, os nós do outro lado —
+  **sem direção**, sem repetição, em ordem canônica (unidade de código).
+- `nodes` = os nós com conexão, em ordem canônica.
+
+Saída: `{ links: { <link_id>: { from, to, relation } }, neighbors: { <nó>:
+[nó…] }, nodes: [nó…] }`.
+
+### 4.13 Sessões salvas (`projection: "studies"`)
+
+- `studies` = as sessões salvas e não apagadas, cada uma com o último
+  `study.saved`: `decks` (aparados, sem vazios nem repetição), `tags`
+  normalizadas, `around` com as chaves de nó normalizadas (§4.12; chave
+  inválida fica como veio — e não casa nada, §4.11), ambos já renomeados, e
+  `practice` (`false` quando ausente).
+- `order` = os ids por `(name ↑, study_id ↑)`, em unidade de código.
+
+Saída: `{ studies: { <study_id>: { name, decks, tags, around, practice } },
+order: [study_id…] }`.
+
+### 4.14 Grafo (`projection: "graph"`)
+
+O acervo como grafo, estilo Obsidian, para as superfícies desenharem (a
+extensão em SVG, a CLI em DOT). Recebe `now`/`tz` (marca os vencidos).
+
+- **Nós** `{ id, kind, label, due }`, com `id` = chave `"kind:id"`:
+  - cartões **ativos** (§4.10), `label` = frente, `due` = está na fila
+    Leitner (§4.1);
+  - decks não arquivados, `label` = nome;
+  - tags: as próprias dos cartões ativos, as dos decks não arquivados e as
+    pontas de conexão (§4.12), **mais os ancestrais implícitos** (`so` de
+    `so/threads`); `label` = nome.
+  - `due` é `false` fora dos cartões.
+- **Arestas** `{ from, to, kind, relation }`, só entre nós do grafo:
+  - `link` — cada conexão (§4.12), na direção gravada, com a `relation`;
+  - `tag` — cartão → cada tag **própria**; deck → cada tag transversal (a
+    herança chega ao cartão pelo deck, sem aresta repetida);
+  - `deck` — cartão → o seu deck;
+  - `parent` — tag → a tag pai (`so/threads` → `so`); deck → o ancestral
+    `::` mais próximo que exista e não esteja arquivado (entre homônimos, o de
+    menor id; nomes comparados com os segmentos aparados, §4.5).
+  - `relation` é `null` fora de `link`; aresta idêntica aparece uma vez.
+- Ordem canônica (unidade de código): nós por `id`; arestas por `(from, to,
+  kind, relation)`, com `null` antes.
+
+Saída: `{ nodes: [ { id, kind, label, due } … ], edges: [ { from, to, kind,
+relation } … ] }`.
 
 ## 5. Sincronização
 
@@ -479,7 +609,7 @@ versionamento tornar recuperável até a sobrescrita.
   "now": "2026-07-10T12:00:00Z",
   "tz": "America/Sao_Paulo",
   "permutations": false,
-  "params": { "decks": [], "tags": [] },
+  "params": { "decks": [], "tags": [], "around": [] },
   "events": [ … envelopes completos … ],
   "expected": { … asserção parcial sobre a saída da projeção … }
 }
@@ -491,4 +621,5 @@ versionamento tornar recuperável até a sobrescrita.
 - `"permutations": true` → a suíte reexecuta com a lista de eventos
   embaralhada (≥ 5 permutações determinísticas) e exige o mesmo resultado.
 - `params` (opcional) carrega parâmetros específicos da projeção além de
-  `now`/`tz` — hoje, o filtro da sessão personalizada (§4.11).
+  `now`/`tz` — hoje, o filtro da sessão personalizada (§4.11), inclusive o
+  `around` das conexões.

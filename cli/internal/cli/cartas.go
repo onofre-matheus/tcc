@@ -37,12 +37,16 @@ func newCartasCmd(a *app.App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			links, err := core.Links(events)
+			if err != nil {
+				return err
+			}
 
 			filter, err := studyFilter(decks, args, tags)
 			if err != nil {
 				return err
 			}
-			match := core.StudyMatcher(decks, filter)
+			match := core.StudyMatcher(decks, core.LinksState{}, filter)
 
 			if asJSON {
 				raw, err := json.MarshalIndent(map[string]any{"decks": decks.Decks, "leitner": leitner}, "", "  ")
@@ -60,7 +64,7 @@ func newCartasCmd(a *app.App) *cobra.Command {
 			}
 			var rows []row
 			for id, card := range leitner.Cards {
-				if !match(card) {
+				if !match(id, card) {
 					continue
 				}
 				if (card.Archived || decks.Decks[card.Deck()].Archived) && !arquivados {
@@ -109,6 +113,9 @@ func newCartasCmd(a *app.App) *cobra.Command {
 				}
 				if len(r.card.Tags) > 0 {
 					status = "#" + strings.Join(r.card.Tags, " #") + " · " + status
+				}
+				if n := len(links.Neighbors[core.NodeCard+":"+r.id]); n > 0 {
+					status += fmt.Sprintf(" · 🔗%d", n)
 				}
 				fmt.Fprintf(a.Out, " %d  %s  %s\n", i+1, r.card.Front, th.Dim(status))
 			}

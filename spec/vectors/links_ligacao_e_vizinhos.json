@@ -1,0 +1,44 @@
+{
+  "name": "conexões explícitas entre cartão, deck e tag: a aresta guarda a direção e a relação, a vizinhança é não direcionada, sem repetição e em ordem canônica; o id da tag é normalizado",
+  "projection": "links",
+  "now": "2026-07-02T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": ["so"] } },
+    { "id": "evt-03", "type": "card.created", "v": 2, "lc": 3, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "f2", "back": "b2", "tags": ["so/threads"] } },
+    { "id": "evt-04", "type": "card.created", "v": 2, "lc": 4, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "front": "f3", "back": "b3", "tags": ["redes"] } },
+    { "id": "evt-05", "type": "link.created", "v": 1, "lc": 5, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "card", "id": "c2" }, "relation": "prerequisito" } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "card", "id": "c3" }, "to": { "kind": "tag", "id": "#SO" } } },
+    { "id": "evt-07", "type": "link.created", "v": 1, "lc": 7, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "link_id": "l3", "from": { "kind": "tag", "id": "so" }, "to": { "kind": "tag", "id": "Redes" } } },
+    { "id": "evt-08", "type": "link.created", "v": 1, "lc": 8, "ts": "2026-07-01T11:03:00Z", "device": "dev-a",
+      "payload": { "link_id": "l4", "from": { "kind": "deck", "id": "d1" }, "to": { "kind": "card", "id": "c3" } } },
+    { "id": "evt-09", "type": "link.created", "v": 1, "lc": 9, "ts": "2026-07-01T11:04:00Z", "device": "dev-a",
+      "payload": { "link_id": "l5", "from": { "kind": "card", "id": "c2" }, "to": { "kind": "card", "id": "c1" } } }
+  ],
+  "expected": {
+    "links": {
+      "l1": { "from": "card:c1", "to": "card:c2", "relation": "prerequisito" },
+      "l2": { "from": "card:c3", "to": "tag:so", "relation": null },
+      "l3": { "from": "tag:so", "to": "tag:redes", "relation": null },
+      "l4": { "from": "deck:d1", "to": "card:c3", "relation": null }
+    },
+    "neighbors": {
+      "card:c1": ["card:c2"],
+      "card:c2": ["card:c1"],
+      "card:c3": ["deck:d1", "tag:so"],
+      "deck:d1": ["card:c3"],
+      "tag:redes": ["tag:so"],
+      "tag:so": ["card:c3", "tag:redes"]
+    },
+    "nodes": ["card:c1", "card:c2", "card:c3", "deck:d1", "tag:redes", "tag:so"]
+  }
+}

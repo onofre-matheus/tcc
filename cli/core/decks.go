@@ -1,6 +1,7 @@
 // Listagem de decks (spec/SPEC.md §4.5) — RF07.
-// Deck = unidade de estudo com nome e tags transversais; hierarquia é
-// convenção de nome com "::" (derivada na exibição, não aqui).
+// Deck = unidade de estudo com nome e tags transversais (reescritas por
+// tag.renamed); hierarquia é convenção de nome com "::" (derivada na
+// exibição, não aqui).
 package core
 
 type Deck struct {
@@ -46,6 +47,19 @@ func Decks(events []Event) (DecksState, error) {
 			if deck, ok := state.Decks[pl.DeckID]; ok {
 				deck.Name = pl.Name // último nome vence
 				state.Decks[pl.DeckID] = deck
+			}
+
+		case "tag.renamed":
+			from, to, ok, err := decodeRename(event)
+			if err != nil {
+				return DecksState{}, err
+			}
+			if !ok {
+				continue
+			}
+			for id, deck := range state.Decks {
+				deck.Tags = renameTags(deck.Tags, from, to)
+				state.Decks[id] = deck
 			}
 
 		case "deck.archived":

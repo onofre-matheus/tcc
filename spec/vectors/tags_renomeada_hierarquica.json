@@ -1,0 +1,30 @@
+{
+  "name": "tag.renamed vale na posição do evento: renomeia a tag e as descendentes nos cartões e decks anteriores, funde com a tag de destino; o cartão criado depois com o nome antigo recria a tag; prefixo de texto (sobre) não é descendente",
+  "projection": "tags",
+  "now": "2026-07-01T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": ["so"] } },
+    { "id": "evt-02", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": ["so/threads"] } },
+    { "id": "evt-03", "type": "card.created", "v": 2, "lc": 3, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "f2", "back": "b2", "tags": ["so", "sistemas"] } },
+    { "id": "evt-04", "type": "card.created", "v": 2, "lc": 4, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "front": "f3", "back": "b3", "tags": ["sobre"] } },
+    { "id": "evt-05", "type": "tag.renamed", "v": 1, "lc": 5, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "from": "so", "to": "sistemas" } },
+    { "id": "evt-06", "type": "card.created", "v": 2, "lc": 6, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c4", "front": "f4", "back": "b4", "tags": ["so"] } }
+  ],
+  "expected": {
+    "tags": {
+      "sistemas": { "cards": 2, "due": 2 },
+      "sistemas/threads": { "cards": 1, "due": 1 },
+      "so": { "cards": 1, "due": 1 },
+      "sobre": { "cards": 1, "due": 1 }
+    },
+    "names": ["sistemas", "sistemas/threads", "so", "sobre"]
+  }
+}

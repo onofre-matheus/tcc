@@ -109,11 +109,11 @@ de *quando* lembrar é a projeção `reminders` compartilhada (SPEC §4.9).
 Três verbos genéricos operam sobre o item N **da última tela** — o kind salvo
 em `last-view.json` decide o evento:
 
-| Comando | task (dia) | deck (decks) | card (cartas) | appointment (agenda) |
-|---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — |
-| `pnn apagar N` | `task.deleted` | ✗ (arquive) | ✗ (arquive) | `appointment.cancelled` |
-| `pnn arquivar N` | ✗ (feito/apagar) | `deck.archived` | `card.archived` | ✗ (apagar) |
+| Comando | task (dia) | deck (decks) | card (cartas) | appointment (agenda) | tag (tags) | study (sessoes) |
+|---|---|---|---|---|---|---|
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` (renomeia) |
+| `pnn apagar N` | `task.deleted` | ✗ (arquive) | ✗ (arquive) | `appointment.cancelled` | ✗ (renomeie/untag) | `study.deleted` |
+| `pnn arquivar N` | ✗ (feito/apagar) | `deck.archived` | `card.archived` | ✗ (apagar) | ✗ | ✗ |
 
 A distinção segue a spec: **apagar é tombstone** (tarefa descartada e
 compromisso cancelado não têm valor histórico), **arquivar preserva** (o
@@ -124,6 +124,12 @@ arquivado.
 Tags de cartão (catálogo 1.3): `--tag` acrescenta, `--untag` remove e `--tags`
 substitui a lista (`--tags ""` limpa). O `card.edited` leva a **lista final
 inteira** — `tags` é um campo só no LWW por campo. Nada mudou, nada é gravado.
+
+Renomear tag (catálogo 1.4): `pnn tags` numera a árvore e `pnn editar N
+"novo-nome"` emite `tag.renamed` — a tag e as descendentes (`so/x` → `novo/x`)
+mudam em cartões, decks e conexões já gravados; renomear para uma tag que já
+existe funde as duas. Vale para o que foi gravado até ali: uma tag criada
+depois com o nome antigo é uma tag nova.
 
 ### Captura e triagem (RF02, RF06, RF09)
 
@@ -145,8 +151,14 @@ final (RF06).
 | `pnn deck "Pai::Filho"` | `deck.created` |
 | `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (interativo: frente, verso, fonte e tags opcionais; v2 sem deck) |
 | `pnn cartas [deck] [--tag T]…` | — (manutenção do acervo: numera os cartões para editar/arquivar) |
-| `pnn tags` | — (tags em árvore `/`, com cartões e vencidos de cada uma) |
-| `pnn revisar [deck] [--tag T]… [--treino]` | `session.started/ended`, `card.explained`, `card.reviewed` (+ `card.practiced` no treino) |
+| `pnn tags` | — (tags em árvore `/`, numerada, com cartões, vencidos e conexões de cada uma) |
+| `pnn ligar A B [C…] [--relacao R]` | `link.created` (A → B, A → C…) |
+| `pnn desligar A B [C…]` | `link.removed` (todas as conexões do par, em qualquer direção) |
+| `pnn conexoes [nó]` | — (sem nó: os nós conectados, mais conectados primeiro; com nó: a vizinhança, numerada) |
+| `pnn grafo [nó] [--raio R] [--sem-cartoes] [--json]` | — (o acervo como grafo em DOT; com nó, o grafo local) |
+| `pnn sessao "Nome" [deck] [--tag T]… [--ao-redor N]… [--treino]` | `study.saved` (o mesmo nome atualiza o filtro) |
+| `pnn sessoes` | — (sessões salvas, numeradas, com vencidos e treino de cada uma hoje) |
+| `pnn revisar [deck] [--tag T]… [--ao-redor N]… [--treino] [--sessao N\|"Nome"]` | `session.started/ended`, `card.explained`, `card.reviewed` (+ `card.practiced` no treino) |
 
 **Tags livres e cartão solto (catálogo 1.3)**: o deck é opcional — no seletor
 de `pnn carta`/triagem, "(sem deck)" (último item) cria o cartão organizado só
@@ -161,6 +173,40 @@ uma); deck e tag juntos combinam com E. `--treino` acrescenta, depois dos
 vencidos, os **não vencidos** que casam: a TUI marca `TREINO · não altera a
 caixa`, e a resposta vira `card.practiced` — estudar antes da hora não promove
 o cartão. `pnn cartas --tag` usa a mesma regra para listar o acervo.
+
+**Conexões (catálogo 1.4, SPEC §4.12)**, estilo Obsidian: `pnn ligar A B`
+conecta dois **nós** — cartão, deck ou tag. Um nó é o **número da última
+tela** (`pnn cartas`, `pnn decks`, `pnn tags`, `pnn conexoes`), uma **`'#tag'`**
+(entre aspas: no shell, `#` começa comentário) ou o **nome exato de um deck**;
+sem `#`, um nome que não é deck vale como tag se ela já existir (tag nova pede
+o `#`). Com mais de dois nós, o primeiro é ligado a cada um dos demais.
+`--relacao` dá nome à conexão (`prerequisito`, `exemplo`, livre); ligar de
+novo um par já ligado não grava nada (com `--relacao`, só se a relação for a
+mesma). `pnn conexoes N` numera o
+próprio nó como 1 e os vizinhos a partir de 2 (`→` sai dele, `←` chega nele,
+`↔` as duas), para `pnn desligar 1 3` sem redigitar. `pnn revisar --ao-redor
+N` estuda a vizinhança: o nó, os ligados a ele (um salto) e, para tag e deck,
+também os ligados às descendentes. Na revisão, as conexões do cartão aparecem
+**depois do verso** (`🔗 conectado a: …`) — material para elaborar, não pista
+para a resposta. `pnn cartas` mostra `🔗N` nos cartões conectados.
+
+**Grafo (SPEC §4.14)**: `pnn grafo` escreve o acervo em DOT — cartões ativos
+(vencidos em vermelho), decks e tags como nós; conexões (setas com a
+relação), tags (tracejado), pertença a deck e hierarquia `/`/`::`
+(pontilhado) como arestas. Renderize com o Graphviz: `pnn grafo | dot -Tsvg >
+grafo.svg`. Com um nó (`pnn grafo '#so'`), sai o **grafo local** — o nó e o que
+está a até `--raio` arestas dele; `--sem-cartoes` deixa só tags e decks, a
+visão geral. É a mesma projeção que a extensão desenha na tela de grafo.
+
+**Sessões salvas (catálogo 1.5, SPEC §4.13)**, como os *decks filtrados* do
+Anki: `pnn sessao "Véspera da P2" --tag prova-p2 --treino` guarda o
+**filtro** (deck, `--tag`, `--ao-redor`, `--treino`) — não a lista de cartões,
+então reaberta a sessão reúne o que casar naquele dia. Salvar de novo com o
+mesmo nome atualiza o filtro (`study.saved` substitui a sessão inteira). `pnn
+sessoes` lista com quantos vencidos e quantos para treinar cada uma tem hoje;
+`pnn revisar --sessao N` (ou o nome) estuda — o filtro salvo não se combina
+com deck/`--tag`/`--ao-redor` avulsos. As tags da sessão acompanham as
+renomeações de tag.
 
 Fluxo de revisão (TUI vermelha): frente → campo "explique com suas palavras"
 (Feynman; vazio = pular) → revela verso + explicação anterior para comparar →

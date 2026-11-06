@@ -1,0 +1,27 @@
+{
+  "name": "tag.renamed reescreve as tags transversais dos decks; renomeação vazia ou para o mesmo nome normalizado é ignorada",
+  "projection": "decks",
+  "now": "2026-07-01T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": ["so/base", "prova"] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T09:01:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "Redes", "tags": ["Prova"] } },
+    { "id": "evt-03", "type": "tag.renamed", "v": 1, "lc": 3, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "from": "so", "to": "sistemas" } },
+    { "id": "evt-04", "type": "tag.renamed", "v": 1, "lc": 4, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "from": "prova", "to": "#PROVA" } },
+    { "id": "evt-05", "type": "tag.renamed", "v": 1, "lc": 5, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "from": "", "to": "nada" } },
+    { "id": "evt-06", "type": "tag.renamed", "v": 1, "lc": 6, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "from": "prova", "to": " " } }
+  ],
+  "expected": {
+    "decks": {
+      "d1": { "name": "SO", "tags": ["sistemas/base", "prova"], "archived": false },
+      "d2": { "name": "Redes", "tags": ["prova"], "archived": false }
+    }
+  }
+}

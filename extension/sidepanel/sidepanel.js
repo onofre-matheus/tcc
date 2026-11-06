@@ -12,6 +12,9 @@ let session = null; // { id, kind, endMs, interval }
 let review = null; // { queue, practiceFrom, index, cards, decks, deckId, revealed }
 let selectedDeck = null; // deck do formulário de cartão: null = ainda não escolhido; "" = (sem deck)
 let dayTasks = { tasks: {}, day_list: [] }; // para o seletor de tarefa do foco
+// Último retrato do acervo (refresh): nomeia os nós do grafo de conexões.
+let graph = { cards: {}, decks: {}, links: { links: {}, neighbors: {}, nodes: [] } };
+const nodeByLabel = new Map(); // rótulo da sugestão → "kind:id"
 
 // Check-in de atenção (self-monitoring, Safren): o alarme dispara no service
 // worker (funciona com o painel fechado); esta chave diz a ele qual sessão
@@ -214,15 +217,15 @@ $("startFocus").onclick = () => beginSession("task", "Foco");
 // O treino livre acrescenta os não vencidos depois da fila; a resposta deles
 // vira card.practiced, que não mexe na caixa.
 function reviewFilter() {
-  const deck = $("reviewDeckSel").value;
-  return { decks: deck ? [deck] : [], tags: store.parseTags($("reviewTags").value) };
+  const deck = $("reviewDeckSel").value, around = $("reviewAround").value;
+  return { decks: deck ? [deck] : [], tags: store.parseTags($("reviewTags").value), around: around ? [around] : [] };
 }
 
 async function updateReviewButton() {
   const filter = reviewFilter();
   const st = await store.state.study(filter);
   const practice = $("reviewPractice").checked ? st.practice.length : 0;
-  const filtered = filter.decks.length > 0 || filter.tags.length > 0;
+  const filtered = filter.decks.length > 0 || filter.tags.length > 0 || filter.around.length > 0;
   const total = st.queue.length + practice;
   // Nada a revisar: a sessão seria para nada — o botão desabilita e o
   // destaque primário passa para "Iniciar foco".
@@ -236,6 +239,7 @@ async function updateReviewButton() {
 $("reviewDeckSel").onchange = updateReviewButton;
 $("reviewTags").oninput = updateReviewButton;
 $("reviewPractice").onchange = updateReviewButton;
+$("reviewAround").onchange = updateReviewButton;
 
 $("startReview").onclick = async () => {
   const filter = reviewFilter();
@@ -327,6 +331,7 @@ function renderCard() {
   }
   $("reveal").hidden = false;
   $("grade").hidden = true;
+  $("cardLinks").hidden = true;
   $("reviewProgress").textContent = `${review.index + 1} / ${review.queue.length}`;
 }
 $("reveal").onclick = async () => {
@@ -342,6 +347,93 @@ $("reveal").onclick = async () => {
   }
   $("reveal").hidden = true;
   $("grade").hidden = false;
+  $("cardLinks").hidden = false;
+  $("linkMsg").textContent = "";
+  await renderCardLinks();
+};
+
+// ---------- Conexões (catálogo 1.4, estilo Obsidian) ----------
+const truncate = (s, max) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join("")}…` : String(s));
+
+// Rótulo humano do nó: frente do cartão, "deck Nome" ou "#tag".
+function nodeLabel(key) {
+  const n = store.parseNode(key);
+  if (!n) return key;
+  if (n.kind === "card") return graph.cards[n.id] ? `“${truncate(graph.cards[n.id].front ?? "", 50)}”` : key;
+  if (n.kind === "deck") return `deck ${graph.decks[n.id]?.name ?? n.id}`;
+  return `#${n.id}`;
+}
+
+// Grafo local de x: cada vizinho com a direção (→ x aponta, ← aponta para x,
+// ↔ as duas), as relações e as conexões do par (para desligar todas).
+function neighborhood(links, x) {
+  return (links.neighbors[x] ?? []).map((y) => {
+    const pair = Object.entries(links.links).filter(
+      ([, l]) => (l.from === x && l.to === y) || (l.from === y && l.to === x)
+    );
+    const out = pair.some(([, l]) => l.from === x), inc = pair.some(([, l]) => l.from === y);
+    const relations = [...new Set(pair.map(([, l]) => l.relation).filter(Boolean))].sort();
+    return { key: y, arrow: out && inc ? "↔" : out ? "→" : "←", relations, ids: pair.map(([id]) => id) };
+  });
+}
+
+const currentCardKey = () =>
+  review && review.index < review.queue.length ? `card:${review.queue[review.index]}` : null;
+
+async function renderCardLinks() {
+  const x = currentCardKey();
+  if (!x) return;
+  graph.links = await store.state.links();
+  const pairs = neighborhood(graph.links, x);
+  const items = pairs.map((nb, i) => {
+    const rel = nb.relations.length ? ` <span class="meta">(${esc(nb.relations.join(", "))})</span>` : "";
+    return `<div class="link-item"><span class="grow">${nb.arrow} ${esc(nodeLabel(nb.key))}${rel}</span>
+      <button type="button" class="btn ghost sm" data-unlink="${i}" title="Desfazer a conexão">✕</button></div>`;
+  });
+  const list = $("cardLinkList");
+  list.innerHTML = items.join("") || '<div class="meta">nenhuma — conecte a um cartão, deck ou #tag abaixo</div>';
+  list.querySelectorAll("[data-unlink]").forEach((el) => {
+    el.onclick = async () => {
+      await store.unlinkAll(pairs[Number(el.dataset.unlink)].ids);
+      await renderCardLinks();
+    };
+  });
+}
+
+// O alvo vem da lista de sugestões (cartão, deck, #tag existente) ou é uma
+// "#tag" nova digitada à mão.
+function resolveNodeInput(text) {
+  const t = text.trim();
+  if (nodeByLabel.has(t)) return nodeByLabel.get(t);
+  const tag = t.startsWith("#") ? store.normalizeTag(t) : "";
+  return tag ? `tag:${tag}` : null;
+}
+
+$("linkBtn").onclick = async () => {
+  const x = currentCardKey();
+  if (!x) return;
+  const y = resolveNodeInput($("linkTarget").value);
+  const msg = $("linkMsg");
+  if (!y) {
+    msg.textContent = "Escolha um cartão, deck ou #tag da lista (tag nova: comece com #).";
+    return;
+  }
+  const relation = $("linkRelation").value.trim();
+  const already = neighborhood(graph.links, x).find((nb) => nb.key === y);
+  if (y === x) {
+    msg.textContent = "Um cartão não se liga a si mesmo.";
+    return;
+  }
+  // Redundante: sem relação, o par já ligado; com relação, a mesma relação.
+  if (already && (!relation || already.relations.includes(relation))) {
+    msg.textContent = `Já ligado a ${nodeLabel(y)}.`;
+    return;
+  }
+  await store.linkNodes(store.parseNode(x), store.parseNode(y), relation);
+  $("linkTarget").value = "";
+  $("linkRelation").value = "";
+  msg.textContent = `🔗 ligado a ${nodeLabel(y)}`;
+  await renderCardLinks();
 };
 async function grade(result) {
   const cardId = review.queue[review.index];
@@ -584,12 +676,14 @@ function renderDecks(dk, lt) {
 // Tags livres (spec §4.10): chips com cartões e vencidos de cada tag; clicar
 // num chip filtra a revisão por ela. As mesmas tags alimentam as sugestões
 // dos campos de tag (datalist).
-function renderTags(tg) {
+function renderTags(tg, lk) {
   $("tagSuggestions").innerHTML = tg.names.map((t) => `<option value="#${esc(t)}"></option>`).join("");
   const chips = tg.names.map((t) => {
     const { cards, due } = tg.tags[t];
     const dueLabel = due ? ` · <span class="due">${plural(due, "vencido", "vencidos")}</span>` : "";
-    return `<button type="button" class="btn ghost sm chip" data-tag="${esc(t)}" title="Filtrar a revisão por #${esc(t)}">#${esc(t)} · ${cards}${dueLabel}</button>`;
+    const degree = lk.neighbors[`tag:${t}`]?.length;
+    const linkLabel = degree ? ` · 🔗${degree}` : "";
+    return `<button type="button" class="btn ghost sm chip" data-tag="${esc(t)}" title="Clique: filtra a revisão por #${esc(t)} · botão direito: renomeia">#${esc(t)} · ${cards}${dueLabel}${linkLabel}</button>`;
   });
   $("tagChips").innerHTML = chips.length ? `<span class="meta">Tags:</span> ${chips.join("")}` : "";
   $("tagChips").querySelectorAll("[data-tag]").forEach((el) => {
@@ -599,8 +693,114 @@ function renderTags(tg) {
       updateReviewButton();
       $("focusPanel").scrollIntoView({ behavior: "smooth" });
     };
+    // Renomear (tag.renamed): vale para cartões, decks e conexões já
+    // gravados, inclusive as descendentes (so/x → novo/x).
+    el.oncontextmenu = async (e) => {
+      e.preventDefault();
+      const tag = el.dataset.tag;
+      const to = window.prompt(`Renomear #${tag} (e as descendentes ${tag}/…) para:`, `#${tag}`);
+      if (to !== null) await store.renameTag(tag, to);
+    };
   });
 }
+
+// Sugestões de nó (cartões ativos, decks ativos, tags) para "conectar a…" e
+// o seletor "ao redor de" da revisão, com os nós que têm conexão.
+function renderGraph(lt, dk, tg, lk) {
+  graph = { cards: lt.cards, decks: dk.decks, links: lk };
+  nodeByLabel.clear();
+  for (const [id, c] of Object.entries(lt.cards)) {
+    if (!c.archived && !(c.deck_id && dk.decks[c.deck_id]?.archived)) nodeByLabel.set(`cartão: ${c.front}`, `card:${id}`);
+  }
+  for (const [id, d] of Object.entries(dk.decks)) if (!d.archived) nodeByLabel.set(`deck: ${d.name}`, `deck:${id}`);
+  for (const t of tg.names) nodeByLabel.set(`#${t}`, `tag:${t}`);
+  $("nodeSuggestions").innerHTML = [...nodeByLabel.keys()].map((l) => `<option value="${esc(l).replace(/"/g, "&quot;")}"></option>`).join("");
+
+  const sel = $("reviewAround");
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">ao redor de: — (qualquer)</option>' +
+    lk.nodes.map((k) => `<option value="${esc(k).replace(/"/g, "&quot;")}">ao redor de: ${esc(nodeLabel(k))} · 🔗${lk.neighbors[k].length}</option>`).join("");
+  setAround(prev);
+}
+
+// Seleciona o nó do "ao redor de"; um nó sem conexões (vindo do grafo ou de
+// uma sessão salva) ganha a própria opção — a vizinhança dele é ele mesmo.
+function setAround(key) {
+  const sel = $("reviewAround");
+  if (key && ![...sel.options].some((o) => o.value === key)) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = `ao redor de: ${nodeLabel(key)}`;
+    sel.append(option);
+  }
+  sel.value = key || "";
+}
+
+// Preenche o filtro da revisão (sessão salva ou pedido do grafo) e abre o
+// painel do filtro, para o usuário ver o que vai estudar antes de começar.
+async function applyFilter({ decks = [], tags = [], around = [], practice = false } = {}) {
+  const deck = decks.find((id) => [...$("reviewDeckSel").options].some((o) => o.value === id)) ?? "";
+  $("reviewDeckSel").value = deck;
+  $("reviewTags").value = tags.map((t) => `#${t}`).join(" ");
+  setAround(around[0] ?? "");
+  $("reviewPractice").checked = !!practice;
+  $("reviewFilter").open = true;
+  await updateReviewButton();
+}
+
+// ---------- Sessões salvas (catálogo 1.5) ----------
+let savedStudies = { studies: {}, order: [] };
+let pendingStudyName = null; // recém-salva: selecionada quando chegar na projeção
+
+function renderStudies(st) {
+  savedStudies = st;
+  const sel = $("savedStudySel");
+  const pending = st.order.find((id) => st.studies[id].name === pendingStudyName);
+  if (pending) pendingStudyName = null;
+  const want = pending ?? sel.value;
+  sel.innerHTML = '<option value="">sessões salvas…</option>' +
+    st.order.map((id) => `<option value="${esc(id)}">${esc(st.studies[id].name)}</option>`).join("");
+  sel.value = st.studies[want] ? want : "";
+  $("deleteStudy").hidden = !sel.value;
+}
+$("savedStudySel").onchange = async () => {
+  const study = savedStudies.studies[$("savedStudySel").value];
+  $("deleteStudy").hidden = !study;
+  if (study) await applyFilter(study);
+};
+$("saveStudy").onclick = async () => {
+  const current = savedStudies.studies[$("savedStudySel").value];
+  const name = window.prompt("Nome da sessão (o mesmo nome atualiza o filtro):", current?.name ?? "");
+  if (!name?.trim()) return;
+  const filter = reviewFilter();
+  // Mesmo nome = a mesma sessão: study.saved com o mesmo id substitui o filtro.
+  const study_id = savedStudies.order.find((id) => savedStudies.studies[id].name === name.trim());
+  pendingStudyName = name.trim();
+  await store.saveStudy({ study_id, name, ...filter, practice: $("reviewPractice").checked });
+};
+$("deleteStudy").onclick = async () => {
+  const id_ = $("savedStudySel").value;
+  const study = savedStudies.studies[id_];
+  if (!study || !window.confirm(`Apagar a sessão "${study.name}"? Só o filtro some — os cartões ficam.`)) return;
+  await store.deleteStudy(id_);
+  $("savedStudySel").value = "";
+};
+
+// ---------- Grafo (outra aba) e o "estudar ao redor" que volta dele ----------
+$("openGraph").onclick = () => {
+  const url = chrome.runtime?.getURL?.("graph/graph.html") ?? "../graph/graph.html";
+  if (chrome.tabs?.create) chrome.tabs.create({ url });
+  else window.open(url, "_blank");
+};
+async function takeReviewRequest() {
+  const request = await store.takeReviewRequest();
+  if (!request) return;
+  $("savedStudySel").value = "";
+  $("deleteStudy").hidden = true;
+  await applyFilter(request);
+  $("focusPanel").scrollIntoView?.({ behavior: "smooth" });
+}
+store.onReviewRequest(takeReviewRequest);
 $("cardDeckSel").onchange = (e) => { selectedDeck = e.target.value; };
 $("deckForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -686,10 +886,10 @@ function renderFocusTasks(t) {
 
 // ---------- Refresh geral ----------
 async function refresh() {
-  const [s, inb, dk, lt, tk, mins, tg] = await Promise.all([
+  const [s, inb, dk, lt, tk, mins, tg, lk, st] = await Promise.all([
     store.state.stats(), store.state.inbox(), store.state.decks(),
     store.state.leitner(), store.state.tasks(), store.state.attentionMinutes(),
-    store.state.tags(),
+    store.state.tags(), store.state.links(), store.state.studies(),
   ]);
   lastInbox = inb;
   const flame = s.streak > 0 ? "🔥" : "•";
@@ -699,7 +899,9 @@ async function refresh() {
   renderFocusTasks(tk);
   renderInbox(inb);
   renderDecks(dk, lt);
-  renderTags(tg);
+  renderTags(tg, lk);
+  renderGraph(lt, dk, tg, lk);
+  renderStudies(st);
   await renderWeek();
   await updateReviewButton();
 }
@@ -707,4 +909,4 @@ async function refresh() {
 store.onChange(refresh);
 mountDebugBar(document.getElementById("debugBar"));
 mountSyncPanel(document.getElementById("syncPanel"));
-store.ready.then(refresh).then(restoreActiveSession);
+store.ready.then(refresh).then(restoreActiveSession).then(takeReviewRequest);

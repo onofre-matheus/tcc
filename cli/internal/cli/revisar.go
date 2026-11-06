@@ -3,7 +3,9 @@
 // spec §4.11. Deck restringe à subárvore `Pai::Filho`; --tag, às tags (e
 // descendentes `/`), herdando as do deck; os dois juntos combinam com E.
 // --treino acrescenta os não vencidos depois da fila: a resposta deles vira
-// card.practiced, que não mexe na caixa.
+// card.practiced, que não mexe na caixa. --ao-redor N estuda a vizinhança de
+// um nó no grafo de conexões (ele e os ligados a ele, um salto). --sessao
+// reabre um filtro salvo (`pnn sessao`).
 package cli
 
 import (
@@ -22,30 +24,45 @@ import (
 
 func newRevisarCmd(a *app.App) *cobra.Command {
 	var minutes, pause int
-	var tags []string
+	var tags, around []string
 	var treino bool
+	var sessao string
 	cmd := &cobra.Command{
 		Use:   "revisar [deck]",
 		Short: "revisa os cartões vencidos até o timer tocar (modo VERMELHO), filtrando por deck/tag",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			events, err := a.Store.Events()
+			g, err := loadGraph(a)
 			if err != nil {
 				return err
 			}
-			leitner, err := core.Leitner(events, a.Params())
-			if err != nil {
-				return err
-			}
-			decks, err := core.Decks(events)
-			if err != nil {
-				return err
-			}
+			leitner, decks := g.leitner, g.decks
 			params := a.Params()
-			if params.Study, err = studyFilter(decks, args, tags); err != nil {
+			if sessao != "" {
+				if len(args)+len(tags)+len(around) > 0 {
+					return fmt.Errorf("--sessao já traz o filtro — use a sessão ou deck/--tag/--ao-redor, não os dois")
+				}
+				studies, err := core.Studies(g.events)
+				if err != nil {
+					return err
+				}
+				_, study, err := resolveStudy(a, studies, sessao)
+				if err != nil {
+					return err
+				}
+				params.Study = study.Filter()
+				treino = treino || study.Practice
+			} else if params.Study, err = studyFilter(decks, args, tags); err != nil {
 				return err
 			}
-			study, err := core.Study(events, params)
+			for _, arg := range around {
+				node, err := g.resolve(a, arg)
+				if err != nil {
+					return err
+				}
+				params.Study.Around = append(params.Study.Around, node.Key())
+			}
+			study, err := core.Study(g.events, params)
 			if err != nil {
 				return err
 			}
@@ -68,6 +85,7 @@ func newRevisarCmd(a *app.App) *cobra.Command {
 					LastFrame:       card.LastFrame,
 					Box:             card.Box,
 					Tags:            core.EffectiveTags(card, decks),
+					Links:           g.linkLines(core.Node{Kind: core.NodeCard, ID: id}),
 					Practice:        i >= due,
 				})
 			}
@@ -127,6 +145,8 @@ func newRevisarCmd(a *app.App) *cobra.Command {
 	cmd.Flags().IntVar(&pause, "pausa", 5, "minutos de pausa após concluir o bloco")
 	cmd.Flags().StringSliceVar(&tags, "tag", nil, "estuda só cartões com a tag ou descendentes (repetível: casa qualquer uma)")
 	cmd.Flags().BoolVar(&treino, "treino", false, "depois dos vencidos, treina os não vencidos (card.practiced: não altera a caixa)")
+	cmd.Flags().StringVar(&sessao, "sessao", "", "usa o filtro de uma sessão salva (N de `pnn sessoes` ou o nome)")
+	cmd.Flags().StringSliceVar(&around, "ao-redor", nil, "estuda a vizinhança do nó (N da última tela, '#tag' ou deck) e dos ligados a ele (repetível)")
 	return cmd
 }
 

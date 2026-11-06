@@ -64,3 +64,8 @@ main { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 16px; }
 .tag-chips .chip { font-size: 11px; padding: 2px 8px; }
 .tag-chips .chip .due { color: var(--a); }
 .card-tags { margin-top: 4px; }
+
+/* Conexões (catálogo 1.4): vizinhança do cartão depois do verso. */
+.card-links { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 4px; }
+.card-links .link-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.card-links .link-item .grow { flex: 1; }

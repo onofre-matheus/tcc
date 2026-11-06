@@ -589,3 +589,23 @@ func TestRevisarTreinoEmiteCardPracticedSemMexerNaCaixa(t *testing.T) {
 		t.Fatalf("o resumo separa o treino:\n%s", m.View())
 	}
 }
+
+// As conexões do cartão aparecem só depois do verso: são material de
+// elaboração, não pista para a resposta.
+func TestRevisarMostraConexoesSoDepoisDoVerso(t *testing.T) {
+	_, emit := recorder()
+	cards := twoCards()
+	cards[0].Links = []string{`→ "O que é thread?" (prerequisito)`, "↔ #redes"}
+	m := NewRevisar(RevisarConfig{SessionID: "r1", Cards: cards, Minutes: 25, PauseMinutes: 5, Emit: emit})
+	m.Init()
+
+	if strings.Contains(m.View(), "conectado a") {
+		t.Fatalf("antes de revelar, as conexões não aparecem:\n%s", m.View())
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Revisar)
+	view := m.View()
+	if !strings.Contains(view, "conectado a") || !strings.Contains(view, `"O que é thread?" (prerequisito)`) || !strings.Contains(view, "#redes") {
+		t.Fatalf("depois do verso, as conexões aparecem:\n%s", view)
+	}
+}

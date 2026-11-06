@@ -1,0 +1,46 @@
+{
+  "name": "parent de deck sobe até o ancestral :: mais próximo que exista e não esteja arquivado (entre homônimos, o menor id; segmentos aparados); parent de tag passa por todos os ancestrais implícitos; conexões duplicadas viram uma aresta",
+  "projection": "graph",
+  "now": "2026-07-02T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "A", "tags": [] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T09:01:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "A::B", "tags": [] } },
+    { "id": "evt-03", "type": "deck.created", "v": 1, "lc": 3, "ts": "2026-07-01T09:02:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d3", "name": "A :: B :: C", "tags": [] } },
+    { "id": "evt-04", "type": "deck.created", "v": 1, "lc": 4, "ts": "2026-07-01T09:03:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d4", "name": "X::Y", "tags": [] } },
+    { "id": "evt-05", "type": "deck.created", "v": 1, "lc": 5, "ts": "2026-07-01T09:04:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d5", "name": "A", "tags": [] } },
+    { "id": "evt-06", "type": "deck.archived", "v": 1, "lc": 6, "ts": "2026-07-01T09:05:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2" } },
+    { "id": "evt-07", "type": "card.created", "v": 2, "lc": 7, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "f1", "back": "b1", "tags": ["a/b/c"] } },
+    { "id": "evt-08", "type": "link.created", "v": 1, "lc": 8, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "deck", "id": "d4" } } },
+    { "id": "evt-09", "type": "link.created", "v": 1, "lc": 9, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "deck", "id": "d4" } } }
+  ],
+  "expected": {
+    "nodes": [
+      { "id": "card:c1", "kind": "card", "label": "f1", "due": true },
+      { "id": "deck:d1", "kind": "deck", "label": "A", "due": false },
+      { "id": "deck:d3", "kind": "deck", "label": "A :: B :: C", "due": false },
+      { "id": "deck:d4", "kind": "deck", "label": "X::Y", "due": false },
+      { "id": "deck:d5", "kind": "deck", "label": "A", "due": false },
+      { "id": "tag:a", "kind": "tag", "label": "a", "due": false },
+      { "id": "tag:a/b", "kind": "tag", "label": "a/b", "due": false },
+      { "id": "tag:a/b/c", "kind": "tag", "label": "a/b/c", "due": false }
+    ],
+    "edges": [
+      { "from": "card:c1", "to": "deck:d4", "kind": "link", "relation": null },
+      { "from": "card:c1", "to": "tag:a/b/c", "kind": "tag", "relation": null },
+      { "from": "deck:d3", "to": "deck:d1", "kind": "parent", "relation": null },
+      { "from": "tag:a/b", "to": "tag:a", "kind": "parent", "relation": null },
+      { "from": "tag:a/b/c", "to": "tag:a/b", "kind": "parent", "relation": null }
+    ]
+  }
+}

@@ -119,10 +119,13 @@ Projeções e o que entregam:
 | Projeção | Lê os eventos… | Entrega |
 |---|---|---|
 | `tasks` | task.* | lista do dia A→B→C, com árvore de subtarefas |
-| `leitner` | card.* (exceto card.practiced), deck.archived | cartões, caixa 1–5 e fila de vencidos |
-| `decks` | deck.* | decks com nome, tags e flag de arquivado |
-| `tags` | card.*, deck.* | tags (normalizadas, hierarquia `/`) com cartões e vencidos |
-| `study` | card.*, deck.* + filtro `{decks, tags}` | sessão personalizada: fila filtrada + não vencidos para treino |
+| `leitner` | card.* (exceto card.practiced), deck.archived, tag.renamed | cartões, caixa 1–5 e fila de vencidos |
+| `decks` | deck.*, tag.renamed | decks com nome, tags e flag de arquivado |
+| `tags` | card.*, deck.*, tag.renamed | tags (normalizadas, hierarquia `/`) com cartões e vencidos |
+| `study` | card.*, deck.*, link.* + filtro `{decks, tags, around}` | sessão personalizada: fila filtrada (inclusive pela vizinhança de conexões) + não vencidos para treino |
+| `links` | link.*, tag.renamed, card.created, deck.created | conexões explícitas, vizinhança não direcionada e nós conectados |
+| `studies` | study.*, tag.renamed | sessões salvas (o filtro com um nome) |
+| `graph` | card.*, deck.*, link.*, tag.renamed | o acervo como grafo: nós (cartões ativos, decks, tags) e arestas (link, tag, deck, parent) |
 | `calendar` | appointment.* | compromissos e próximos (`upcoming`) |
 | `inbox` | note.*, distraction.* | pendências de triagem |
 | `stats` | card.reviewed, session.ended | streak, dias estudados, revisões de hoje |
@@ -200,8 +203,14 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 | `pnn deck "Pai::Filho" [--tag t]` | `deck.created` | hierarquia por convenção de nome |
 | `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (v2 sem deck) | TUI em série: frente → verso → fonte → tags; "(sem deck)" cria cartão solto |
 | `pnn cartas [deck] [--tag T]… [--arquivados]` | — | manutenção do acervo, numerada, com as tags |
-| `pnn tags [--json]` | — | tags em árvore `/` com cartões e vencidos |
-| `pnn revisar [deck] [--tag T]… [--treino] [-m MIN]` | `session.started/ended`, `card.explained`, `card.reviewed`, `card.practiced` | TUI vermelha, fila frágil→consolidada; `--treino` inclui os não vencidos sem mexer nas caixas |
+| `pnn tags [--json]` | — | tags em árvore `/`, numerada, com cartões, vencidos e conexões |
+| `pnn ligar A B [C…] [--relacao R]` | `link.created` | conexão estilo Obsidian; nó = N da última tela, `'#tag'` ou nome de deck |
+| `pnn desligar A B [C…]` | `link.removed` | remove todas as conexões do par |
+| `pnn conexoes [nó] [--json]` | — | sem nó, os nós conectados; com nó, a vizinhança numerada (o nó é o 1) |
+| `pnn grafo [nó] [--raio R] [--sem-cartoes] [--json]` | — | o acervo em DOT: `pnn grafo \| dot -Tsvg > grafo.svg`; com nó, o grafo local |
+| `pnn sessao "Nome" [deck] [--tag T]… [--ao-redor N]… [--treino]` | `study.saved` | salva o filtro de revisão com um nome (o mesmo nome atualiza) |
+| `pnn sessoes [--json]` | — | sessões salvas, numeradas, com vencidos e treino de hoje |
+| `pnn revisar [deck] [--tag T]… [--ao-redor N]… [--treino] [--sessao N] [-m MIN]` | `session.started/ended`, `card.explained`, `card.reviewed`, `card.practiced` | TUI vermelha, fila frágil→consolidada; `--treino` inclui os não vencidos sem mexer nas caixas; `--ao-redor` estuda a vizinhança de um nó; conexões aparecem depois do verso |
 
 ### Sessão
 
@@ -219,11 +228,11 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 Três verbos genéricos operam sobre o item **N da última tela**; o `kind` salvo
 decide o evento ([`internal/cli/editar.go`](internal/cli/editar.go)):
 
-| Comando | task | deck | card | appointment |
-|---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — |
-| `pnn apagar N` | `task.deleted` | ✗ arquive | ✗ arquive | `appointment.cancelled` |
-| `pnn arquivar N` | ✗ feito/apagar | `deck.archived` | `card.archived` | ✗ apagar |
+| Comando | task | deck | card | appointment | tag | study |
+|---|---|---|---|---|---|---|
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` |
+| `pnn apagar N` | `task.deleted` | ✗ arquive | ✗ arquive | `appointment.cancelled` | ✗ | `study.deleted` |
+| `pnn arquivar N` | ✗ feito/apagar | `deck.archived` | `card.archived` | ✗ apagar | ✗ | ✗ |
 
 Distinção deliberada: **apagar é tombstone** (tarefa e compromisso descartados
 não têm valor histórico — somem do estado); **arquivar preserva** (o histórico

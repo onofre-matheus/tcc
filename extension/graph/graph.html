@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grafo — Procrastina Não</title>
+    <link rel="stylesheet" href="../ui/app.css" />
+    <link rel="stylesheet" href="graph.css" />
+  </head>
+  <body>
+    <!-- Grafo do acervo (spec §4.14), estilo Obsidian: cartões, tags e decks;
+         conexões explícitas, tags, pertença a deck e hierarquia. -->
+    <header class="graph-bar">
+      <strong>🕸 Grafo do acervo</strong>
+      <label><input type="checkbox" id="show-card" checked /> cartões</label>
+      <label><input type="checkbox" id="show-tag" checked /> tags</label>
+      <label><input type="checkbox" id="show-deck" checked /> decks</label>
+      <select id="depth" aria-label="Grafo inteiro ou local">
+        <option value="0">grafo inteiro</option>
+        <option value="1">local: 1 salto</option>
+        <option value="2">local: 2 saltos</option>
+      </select>
+      <input id="search" list="graphNodes" placeholder="buscar nó…" aria-label="Buscar nó" />
+      <span class="meta grow" id="stats"></span>
+    </header>
+    <main class="graph-main">
+      <svg id="canvas" role="img" aria-label="Grafo de cartões, tags e decks"></svg>
+      <aside id="info" class="panel" hidden>
+        <h2 id="infoTitle"></h2>
+        <div class="meta" id="infoKind"></div>
+        <div id="infoLinks"></div>
+        <div class="meta" id="infoOther"></div>
+        <input id="linkRelation" placeholder="relação da próxima conexão (opcional)" aria-label="Relação" />
+        <div class="row">
+          <button type="button" class="btn sm" id="linkMode">🔗 ligar a…</button>
+          <button type="button" class="btn primary sm" id="studyAround">📚 estudar ao redor</button>
+        </div>
+        <div class="meta" id="infoMsg"></div>
+      </aside>
+    </main>
+    <footer class="meta legend">
+      <span class="dot card"></span> cartão <span class="dot due"></span> vencido
+      <span class="dot tag"></span> tag <span class="dot deck"></span> deck ·
+      ── conexão · ┄ tag · ⋯ deck e hierarquia · clique: detalhes · arraste: move · roda: zoom
+    </footer>
+    <datalist id="graphNodes"></datalist>
+    <script type="module" src="graph.js"></script>
+  </body>
+</html>

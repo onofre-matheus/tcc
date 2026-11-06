@@ -17,12 +17,17 @@ import { project as stats } from "../core/stats.js";
 import { project as inbox } from "../core/inbox.js";
 import { project as calendar } from "../core/calendar.js";
 import { project as review } from "../core/review.js";
-import { project as tags, normalizeTags } from "../core/tags.js";
+import { project as tags, normalizeTags, normalizeTag } from "../core/tags.js";
 import { project as study } from "../core/study.js";
+import { project as links, cleanNode } from "../core/links.js";
+import { project as studies } from "../core/studies.js";
+import { project as graph } from "../core/graph.js";
 import { attentionWindowSeconds } from "../core/attention.js";
 
 // Entrada livre de tags e tags efetivas (cartão ∪ deck), para a UI.
-export { parseTags, effectiveTags } from "../core/tags.js";
+export { parseTags, effectiveTags, normalizeTag } from "../core/tags.js";
+// Nós do grafo de conexões ("kind:id"), para a UI.
+export { parseNode, nodeKey } from "../core/links.js";
 
 // Deslocamento de tempo para DEBUG: viaja no tempo para testar vencimentos do
 // Leitner e streaks sem esperar dias reais. Afeta o `now` das projeções e o
@@ -70,9 +75,16 @@ export const state = {
   leitner: () => log.project(leitner, dayParams()),
   decks: () => log.project(decks),
   tags: () => log.project(tags, dayParams()),
-  // Sessão personalizada (spec §4.11): { decks: [deck_id], tags: [tag] } →
-  // { queue: vencidos que casam, practice: não vencidos que casam }.
+  // Sessão personalizada (spec §4.11): { decks: [deck_id], tags: [tag],
+  // around: ["kind:id"] } → { queue: vencidos que casam, practice: não
+  // vencidos que casam }.
   study: (filter = {}) => log.project(study, { ...dayParams(), ...filter }),
+  // Conexões (spec §4.12): { links, neighbors, nodes }.
+  links: () => log.project(links),
+  // Sessões salvas (spec §4.13): { studies, order }.
+  studies: () => log.project(studies),
+  // Grafo do acervo (spec §4.14): { nodes, edges }, para a tela de grafo.
+  graph: () => log.project(graph, dayParams()),
   stats: () => log.project(stats, dayParams()),
   inbox: () => log.project(inbox),
   // A retrospectiva navega no histórico variando só o instante de referência:
@@ -153,6 +165,61 @@ export const reviewCard = (card_id, result, session_id) =>
 // resposta sem mexer na caixa — nenhuma projeção de agendamento lê o evento.
 export const practiceCard = (card_id, result, session_id) =>
   log.append("card.practiced", { card_id, result, ...(session_id ? { session_id } : {}) });
+
+// Conexão explícita entre dois nós { kind: "card"|"deck"|"tag", id }
+// (catálogo 1.4); relation é livre ("prerequisito", "exemplo"…).
+export async function linkNodes(from, to, relation) {
+  const a = cleanNode(from), b = cleanNode(to);
+  if (!a || !b) throw new Error("nó inválido");
+  const rel = String(relation ?? "").trim();
+  const link_id = id("l");
+  await log.append("link.created", { link_id, from: a, to: b, ...(rel ? { relation: rel } : {}) });
+  return link_id;
+}
+
+// Desligar remove todas as conexões do par: duas criadas em dispositivos
+// diferentes são arestas distintas (spec §3).
+export async function unlinkAll(link_ids) {
+  for (const link_id of link_ids) await log.append("link.removed", { link_id });
+}
+
+// tag.renamed (catálogo 1.4): renomeia a tag e as descendentes nas
+// ocorrências já gravadas (cartões, decks, conexões). Vazio ou igual: nada.
+export async function renameTag(from, to) {
+  const a = normalizeTag(from), b = normalizeTag(to);
+  if (!a || !b || a === b) return false;
+  await log.append("tag.renamed", { from: a, to: b });
+  return true;
+}
+
+// Sessão salva (catálogo 1.5): o filtro com um nome. Salvar de novo com o
+// mesmo study_id substitui a sessão inteira (é assim que se edita).
+export async function saveStudy({ study_id, name, decks = [], tags = [], around = [], practice = false }) {
+  const id_ = study_id || id("st");
+  await log.append("study.saved", {
+    study_id: id_, name: String(name).trim(), decks, tags: normalizeTags(tags), around, practice: !!practice,
+  });
+  return id_;
+}
+
+export const deleteStudy = (study_id) => log.append("study.deleted", { study_id });
+
+// Pedido de revisão vindo de outra tela (o grafo → "estudar ao redor"): não é
+// evento — é estado de UI, como a sessão ativa. O side panel o aplica no
+// filtro e o apaga.
+export const REVIEW_REQUEST_KEY = "review_request";
+export const requestReview = (filter) =>
+  chrome.storage.local.set({ [REVIEW_REQUEST_KEY]: { ...filter, at: Date.now() } });
+export async function takeReviewRequest() {
+  const { [REVIEW_REQUEST_KEY]: request } = await chrome.storage.local.get(REVIEW_REQUEST_KEY);
+  if (request) await chrome.storage.local.remove(REVIEW_REQUEST_KEY);
+  return request ?? null;
+}
+export function onReviewRequest(callback) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[REVIEW_REQUEST_KEY]?.newValue) callback();
+  });
+}
 
 // Andaime opcional (catálogo v2): frame != "feynman" grava o método usado e
 // sobe a versão do payload. Feynman é o padrão e mantém o evento v1 inalterado.

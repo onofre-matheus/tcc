@@ -40,3 +40,39 @@ func TestParseTags(t *testing.T) {
 		}
 	}
 }
+
+func TestRenameTag(t *testing.T) {
+	for _, c := range []struct{ tag, from, to, want string }{
+		{"so", "so", "sistemas", "sistemas"},
+		{"so/threads/posix", "so", "sistemas", "sistemas/threads/posix"},
+		{"sobre", "so", "sistemas", "sobre"}, // prefixo de texto não é descendente
+		{"redes", "so", "sistemas", "redes"},
+		{"so/threads", "so/threads", "so/concorrencia", "so/concorrencia"},
+		{"so/x", "so", "so/base", "so/base/x"}, // renomear para baixo da própria tag
+	} {
+		if got := core.RenameTag(c.tag, c.from, c.to); got != c.want {
+			t.Errorf("RenameTag(%q, %q, %q) = %q, esperado %q", c.tag, c.from, c.to, got, c.want)
+		}
+	}
+}
+
+func TestParseNode(t *testing.T) {
+	for key, want := range map[string]string{
+		"card:c1":          "card:c1",
+		"tag:#SO/Threads ": "tag:so/threads",
+		"deck: d1 ":        "deck:d1",
+		"tag:a:b":          "tag:a:b", // o id pode ter ":" — corta no primeiro
+		"note:n1":          "",        // kind desconhecido
+		"tag: # ":          "",        // tag vazia
+		"c1":               "",        // sem kind
+	} {
+		node, ok := core.ParseNode(key)
+		got := ""
+		if ok {
+			got = node.Key()
+		}
+		if got != want {
+			t.Errorf("ParseNode(%q) = %q (ok=%v), esperado %q", key, got, ok, want)
+		}
+	}
+}

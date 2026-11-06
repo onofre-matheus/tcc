@@ -16,7 +16,7 @@ uma **extensão de navegador** e uma **CLI em Go** (`pnn`).
 |---|---|
 | `latex/` | Monografia em LaTeX (`main.tex`, classe `facom-ufu-abntex2`, `figuras/`) e o PDF compilado (`main.pdf`) |
 | `cli/` | CLI em Go `pnn` (alias `procrastina`) — ver [`cli/README.md`](cli/README.md) |
-| `extension/` | Extensão de navegador (Manifest V3): popup, side panel e o mesmo core do log de eventos |
+| `extension/` | Extensão de navegador (Manifest V3): popup, side panel, tela de grafo do acervo e o mesmo core do log de eventos |
 | `spec/` | Especificação compartilhada: [`SPEC.md`](spec/SPEC.md) (modelo de eventos), [`CLI.md`](spec/CLI.md) e os vetores de conformidade (`vectors/`) |
 | `scripts/` | Utilitários de apoio (ex.: `seed-demo.sh`) |
 

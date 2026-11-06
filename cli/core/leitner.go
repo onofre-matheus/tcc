@@ -121,6 +121,18 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 				card.Tags = NormalizeTags(*pl.Tags)
 			}
 
+		case "tag.renamed":
+			// vale na posição do evento: só as tags já gravadas mudam
+			from, to, ok, err := decodeRename(event)
+			if err != nil {
+				return LeitnerState{}, err
+			}
+			if ok {
+				for _, card := range cards {
+					card.Tags = renameTags(card.Tags, from, to)
+				}
+			}
+
 		// card.practiced (treino fora do vencimento) é ignorado de propósito:
 		// estudar antes da hora não promove nem regride o cartão.
 

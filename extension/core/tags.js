@@ -33,6 +33,20 @@ export function normalizeTags(raw) {
 // ("#SO #Prova-P2, redes" → so, prova-p2, redes).
 export const parseTags = (input) => normalizeTags(String(input ?? "").split(/[\s,]+/));
 
+// tag.renamed (spec §3, Conexões e renomeação de tag): from e as
+// descendentes viram to ("so/x" → "sistemas/x"); "sobre" não é descendente.
+export const renameTag = (tag, from, to) => (tagUnder(tag, from) ? to + tag.slice(from.length) : tag);
+
+// Renomeia a lista e deduplica — renomear para uma tag existente funde as duas.
+export const renameTags = (tags, from, to) => normalizeTags(tags.map((t) => renameTag(t, from, to)));
+
+// Lê um tag.renamed com os dois nomes normalizados; null = evento ignorado
+// (nome vazio ou de-para iguais).
+export function decodeRename(payload) {
+  const from = normalizeTag(payload?.from), to = normalizeTag(payload?.to);
+  return from && to && from !== to ? { from, to } : null;
+}
+
 // Tags efetivas = as do cartão ∪ as do próprio deck (as "transversais").
 export const effectiveTags = (card, decks) =>
   normalizeTags([...(card.tags ?? []), ...(card.deck_id ? decks[card.deck_id]?.tags ?? [] : [])]);

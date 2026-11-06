@@ -1,0 +1,27 @@
+{
+  "name": "tag.renamed reescreve as tags dos cartões (normalizando os dois nomes) e deduplica; não mexe em caixa nem vencimento; card.edited posterior com o nome antigo o traz de volta",
+  "projection": "leitner",
+  "now": "2026-07-01T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 2, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "f1", "back": "b1", "tags": ["SO/Threads", "x"] } },
+    { "id": "evt-02", "type": "card.created", "v": 2, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "f2", "back": "b2", "tags": ["sistemas", "so"] } },
+    { "id": "evt-03", "type": "card.created", "v": 2, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "front": "f3", "back": "b3", "tags": ["so"] } },
+    { "id": "evt-04", "type": "tag.renamed", "v": 1, "lc": 4, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "from": " so ", "to": "#Sistemas" } },
+    { "id": "evt-05", "type": "card.edited", "v": 1, "lc": 5, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "tags": ["so", "y"] } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": { "tags": ["sistemas/threads", "x"], "box": 1, "due": "2026-07-01" },
+      "c2": { "tags": ["sistemas"] },
+      "c3": { "tags": ["so", "y"] }
+    },
+    "queue": ["c1", "c2", "c3"]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "tag.renamed reescreve as pontas de conexão já existentes, inclusive as descendentes (so/threads → sistemas/threads); a que vira laço deixa de valer; conexão posterior com o nome antigo é uma tag nova",
+  "projection": "links",
+  "now": "2026-07-02T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 2, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "f1", "back": "b1", "tags": ["so"] } },
+    { "id": "evt-02", "type": "link.created", "v": 1, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "tag", "id": "so" } } },
+    { "id": "evt-03", "type": "link.created", "v": 1, "lc": 3, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "tag", "id": "so/threads" }, "to": { "kind": "tag", "id": "redes" } } },
+    { "id": "evt-04", "type": "link.created", "v": 1, "lc": 4, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "link_id": "l3", "from": { "kind": "tag", "id": "sistemas" }, "to": { "kind": "tag", "id": "so" } } },
+    { "id": "evt-05", "type": "tag.renamed", "v": 1, "lc": 5, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "from": "#SO", "to": "Sistemas" } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-07-01T13:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l4", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "tag", "id": "so" } } }
+  ],
+  "expected": {
+    "links": {
+      "l1": { "from": "card:c1", "to": "tag:sistemas", "relation": null },
+      "l2": { "from": "tag:sistemas/threads", "to": "tag:redes", "relation": null },
+      "l4": { "from": "card:c1", "to": "tag:so", "relation": null }
+    },
+    "neighbors": {
+      "card:c1": ["tag:sistemas", "tag:so"],
+      "tag:sistemas": ["card:c1"],
+      "tag:sistemas/threads": ["tag:redes"]
+    },
+    "nodes": ["card:c1", "tag:redes", "tag:sistemas", "tag:sistemas/threads", "tag:so"]
+  }
+}

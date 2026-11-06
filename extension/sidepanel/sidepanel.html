@@ -36,10 +36,22 @@
           <details id="reviewFilter" style="margin-top: 8px">
             <summary class="meta">Filtrar revisão (deck, tags, treino)</summary>
             <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px">
+              <!-- Sessões salvas (catálogo 1.5): o filtro com um nome. -->
+              <div class="row">
+                <select id="savedStudySel" aria-label="Sessão salva" class="grow">
+                  <option value="">sessões salvas…</option>
+                </select>
+                <button type="button" class="btn ghost sm" id="saveStudy" title="Salvar este filtro com um nome (mesmo nome atualiza)">💾 salvar</button>
+                <button type="button" class="btn ghost sm" id="deleteStudy" title="Apagar a sessão salva escolhida" hidden>🗑</button>
+              </div>
               <select id="reviewDeckSel" aria-label="Deck da revisão">
                 <option value="">todos os decks</option>
               </select>
               <input id="reviewTags" list="tagSuggestions" placeholder="#tags (so inclui so/…)" aria-label="Tags da revisão" />
+              <!-- Conexões (spec §4.11, around): o nó e os ligados a ele, um salto. -->
+              <select id="reviewAround" aria-label="Estudar ao redor de um nó conectado">
+                <option value="">ao redor de: — (qualquer)</option>
+              </select>
               <label class="meta" title="Depois dos vencidos, revisa também os que ainda não venceram. A resposta é registrada como treino e não muda a caixa do cartão.">
                 <input type="checkbox" id="reviewPractice" /> treino livre: inclui os não vencidos (não mexe nas caixas)
               </label>
@@ -102,6 +114,18 @@
             <button class="btn" id="wrong">Errei</button>
             <button class="btn primary" id="correct">Acertei</button>
           </div>
+          <!-- Conexões (catálogo 1.4), depois do verso: material para elaborar,
+               não pista para a resposta. -->
+          <div id="cardLinks" class="card-links" hidden>
+            <div class="meta">🔗 Conexões</div>
+            <div id="cardLinkList"></div>
+            <div class="row">
+              <input id="linkTarget" list="nodeSuggestions" placeholder="conectar a… (cartão, deck ou #tag)" aria-label="Conectar a" />
+              <input id="linkRelation" placeholder="relação" aria-label="Relação (opcional)" style="max-width: 90px" />
+              <button class="btn sm" id="linkBtn" type="button">Ligar</button>
+            </div>
+            <div class="meta" id="linkMsg"></div>
+          </div>
           <div class="row" id="cardMaint" style="margin-top: 4px">
             <button class="btn ghost sm" id="editCard" title="Corrigir frente/verso">✎ corrigir</button>
             <button class="btn ghost sm" id="archiveCardBtn" title="Tirar da fila preservando o histórico">🗄 arquivar</button>
@@ -139,6 +163,7 @@
         <h2>Decks</h2>
         <div id="decks"></div>
         <div id="tagChips" class="tag-chips"></div>
+        <button type="button" class="btn ghost sm" id="openGraph" style="margin-top: 8px" title="Cartões, tags e decks como grafo (estilo Obsidian), numa aba">🕸 Ver grafo</button>
         <form id="deckForm" class="row" style="margin-top: 8px">
           <input id="deckName" placeholder="Novo deck (use :: para sub-deck)" required />
           <button class="btn sm" type="submit">+</button>
@@ -157,6 +182,7 @@
     </main>
 
     <datalist id="tagSuggestions"></datalist>
+    <datalist id="nodeSuggestions"></datalist>
 
     <footer class="debug-bar" id="debugBar"></footer>
 

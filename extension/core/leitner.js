@@ -3,7 +3,7 @@
 
 import { normalize } from "./envelope.js";
 import { localDate, addDays } from "./time.js";
-import { normalizeTags } from "./tags.js";
+import { normalizeTags, renameTags, decodeRename } from "./tags.js";
 
 const MAX_BOX = 5;
 const INTERVAL_DAYS = { 1: 1, 2: 3, 3: 7, 4: 14, 5: 30 };
@@ -39,6 +39,10 @@ export function project(events, { now, tz }) {
       if (front !== undefined) card.front = front;
       if (back !== undefined) card.back = back;
       if (tags !== undefined) card.tags = normalizeTags(tags);
+    } else if (event.type === "tag.renamed") {
+      // vale na posição do evento: só as tags já gravadas mudam
+      const rename = decodeRename(event.payload);
+      if (rename) for (const card of cards.values()) card.tags = renameTags(card.tags, rename.from, rename.to);
     }
     // card.practiced (treino fora do vencimento) é ignorado de propósito:
     // estudar antes da hora não promove nem regride o cartão.
