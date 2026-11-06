@@ -33,7 +33,7 @@ func Decks(events []Event) (DecksState, error) {
 			if err != nil {
 				return DecksState{}, err
 			}
-			state.Decks[pl.DeckID] = Deck{Name: pl.Name, Tags: orEmpty(pl.Tags)}
+			state.Decks[pl.DeckID] = Deck{Name: pl.Name, Tags: NormalizeTags(pl.Tags)}
 
 		case "deck.renamed":
 			pl, err := decodePayload[struct {

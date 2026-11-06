@@ -1,0 +1,22 @@
+{
+  "name": "card.created v2 sem deck_id: cartão solto entra na fila com deck_id null e tags normalizadas",
+  "projection": "leitner",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Sistemas Operacionais", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 2, "lc": 2, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "O que é deadlock?", "back": "Espera circular permanente", "tags": ["SO", "#Concorrência"] } },
+    { "id": "evt-03", "type": "card.created", "v": 1, "lc": 3, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "deck_id": "d1", "front": "O que é um processo?", "back": "Programa em execução", "tags": [] } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": { "deck_id": null, "box": 1, "due": "2026-07-01", "tags": ["so", "concorrência"], "archived": false },
+      "c2": { "deck_id": "d1", "box": 1, "due": "2026-07-01", "tags": [] }
+    },
+    "queue": ["c1", "c2"]
+  }
+}

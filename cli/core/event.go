@@ -21,12 +21,3 @@ func decodePayload[T any](e Event) (T, error) {
 	err := json.Unmarshal(e.Payload, &p)
 	return p, err
 }
-
-// orEmpty troca slice ausente por vazia: no JSON projetado, listas são sempre
-// `[]`, nunca `null` (mesma saída do cliente JS).
-func orEmpty(tags []string) []string {
-	if tags == nil {
-		return []string{}
-	}
-	return tags
-}

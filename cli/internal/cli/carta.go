@@ -1,4 +1,5 @@
-// `pnn carta [deck]` — abre a criação de cartões em série.
+// `pnn carta [deck] [--tag x]…` — abre a criação de cartões em série. Sem
+// decks (ou com --sem-deck), o cartão nasce solto, só com tags.
 package cli
 
 import (
@@ -14,9 +15,11 @@ import (
 )
 
 func newCartaCmd(a *app.App) *cobra.Command {
-	return &cobra.Command{
+	var tags []string
+	var noDeck bool
+	cmd := &cobra.Command{
 		Use:   "carta [deck]",
-		Short: "cria cartões em série (frente → verso → fonte opcional)",
+		Short: "cria cartões em série (frente → verso → fonte → tags, opcionais as duas últimas)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			events, err := a.Store.Events()
@@ -28,12 +31,17 @@ func newCartaCmd(a *app.App) *cobra.Command {
 				return err
 			}
 			options := deckOptions(decks)
-			if len(options) == 0 {
-				return fmt.Errorf("nenhum deck — crie um com `pnn deck \"Nome\"`")
+			cfg := tui.CartaConfig{
+				Decks:  options,
+				NoDeck: noDeck,
+				Tags:   core.NormalizeTags(tags),
+				Emit:   emitTo(a),
+				EmitV:  emitVTo(a),
 			}
-
-			cfg := tui.CartaConfig{Decks: options, Emit: emitTo(a)}
 			if len(args) == 1 {
+				if noDeck {
+					return fmt.Errorf("escolha um deck OU --sem-deck, não os dois")
+				}
 				i := slices.IndexFunc(options, func(o tui.DeckOption) bool { return o.Name == args[0] })
 				if i < 0 {
 					return fmt.Errorf("deck %q não encontrado — veja `pnn decks`", args[0])
@@ -55,6 +63,9 @@ func newCartaCmd(a *app.App) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "tag inicial da série (repetível; editável no formulário)")
+	cmd.Flags().BoolVar(&noDeck, "sem-deck", false, "cria cartões soltos, organizados só por tags")
+	return cmd
 }
 
 // deckOptions lista os decks em ordem alfabética de caminho (a árvore `::`

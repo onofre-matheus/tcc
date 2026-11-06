@@ -1,0 +1,31 @@
+{
+  "name": "sem filtro, a fila da sessão é a fila Leitner inteira (cartões com e sem deck), em qualquer ordem de chegada",
+  "projection": "study",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "params": {},
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": [] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T09:01:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "SO::Escalonamento", "tags": ["prova-p2"] } },
+    { "id": "evt-03", "type": "deck.created", "v": 1, "lc": 3, "ts": "2026-07-01T09:02:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d3", "name": "Redes", "tags": [] } },
+    { "id": "evt-04", "type": "deck.created", "v": 1, "lc": 4, "ts": "2026-07-01T09:03:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d4", "name": "SOciologia", "tags": [] } },
+    { "id": "evt-05", "type": "card.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": ["so/concorrencia"] } },
+    { "id": "evt-06", "type": "card.created", "v": 1, "lc": 6, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "deck_id": "d2", "front": "f2", "back": "b2", "tags": [] } },
+    { "id": "evt-07", "type": "card.created", "v": 2, "lc": 7, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "front": "f3", "back": "b3", "tags": ["so/concorrencia/deadlock", "prova-p2"] } },
+    { "id": "evt-08", "type": "card.created", "v": 1, "lc": 8, "ts": "2026-07-01T13:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c4", "deck_id": "d3", "front": "f4", "back": "b4", "tags": ["prova-p2"] } },
+    { "id": "evt-09", "type": "card.created", "v": 2, "lc": 9, "ts": "2026-07-01T14:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c5", "front": "f5", "back": "b5", "tags": ["sobre"] } },
+    { "id": "evt-10", "type": "card.created", "v": 1, "lc": 10, "ts": "2026-07-01T15:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c6", "deck_id": "d4", "front": "f6", "back": "b6", "tags": [] } }
+  ],
+  "expected": { "queue": ["c1", "c2", "c3", "c4", "c5", "c6"], "practice": [] }
+}

@@ -2,6 +2,7 @@
 // Deck = unidade de estudo com nome e tags transversais.
 
 import { normalize } from "./envelope.js";
+import { normalizeTags } from "./tags.js";
 
 export function project(events) {
   const decks = {};
@@ -9,7 +10,7 @@ export function project(events) {
   for (const event of normalize(events)) {
     if (event.type === "deck.created") {
       const { deck_id, name, tags } = event.payload;
-      decks[deck_id] = { name, tags: tags ?? [], archived: false };
+      decks[deck_id] = { name, tags: normalizeTags(tags), archived: false };
     } else if (event.type === "deck.renamed") {
       const deck = decks[event.payload.deck_id];
       if (deck) deck.name = event.payload.name; // último nome vence

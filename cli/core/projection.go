@@ -9,6 +9,9 @@ package core
 type Params struct {
 	Now string
 	TZ  string
+	// Study é o filtro da sessão personalizada (projeção "study", §4.11);
+	// as demais projeções o ignoram.
+	Study StudyFilter
 }
 
 type Projection func(events []Event, p Params) (any, error)

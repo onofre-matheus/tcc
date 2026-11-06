@@ -119,8 +119,10 @@ Projeções e o que entregam:
 | Projeção | Lê os eventos… | Entrega |
 |---|---|---|
 | `tasks` | task.* | lista do dia A→B→C, com árvore de subtarefas |
-| `leitner` | card.*, deck.archived | cartões, caixa 1–5 e fila de vencidos |
+| `leitner` | card.* (exceto card.practiced), deck.archived | cartões, caixa 1–5 e fila de vencidos |
 | `decks` | deck.* | decks com nome, tags e flag de arquivado |
+| `tags` | card.*, deck.* | tags (normalizadas, hierarquia `/`) com cartões e vencidos |
+| `study` | card.*, deck.* + filtro `{decks, tags}` | sessão personalizada: fila filtrada + não vencidos para treino |
 | `calendar` | appointment.* | compromissos e próximos (`upcoming`) |
 | `inbox` | note.*, distraction.* | pendências de triagem |
 | `stats` | card.reviewed, session.ended | streak, dias estudados, revisões de hoje |
@@ -196,9 +198,10 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 |---|---|---|
 | `pnn decks [--arquivados]` | — | árvore `::` com vencidos por deck, numerada |
 | `pnn deck "Pai::Filho" [--tag t]` | `deck.created` | hierarquia por convenção de nome |
-| `pnn carta [deck]` | `card.created` | TUI em série: frente → verso → fonte |
-| `pnn cartas [deck] [--arquivados]` | — | manutenção do acervo, numerada |
-| `pnn revisar [deck] [-m MIN]` | `session.started/ended`, `card.explained`, `card.reviewed` | TUI vermelha, fila frágil→consolidada |
+| `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (v2 sem deck) | TUI em série: frente → verso → fonte → tags; "(sem deck)" cria cartão solto |
+| `pnn cartas [deck] [--tag T]… [--arquivados]` | — | manutenção do acervo, numerada, com as tags |
+| `pnn tags [--json]` | — | tags em árvore `/` com cartões e vencidos |
+| `pnn revisar [deck] [--tag T]… [--treino] [-m MIN]` | `session.started/ended`, `card.explained`, `card.reviewed`, `card.practiced` | TUI vermelha, fila frágil→consolidada; `--treino` inclui os não vencidos sem mexer nas caixas |
 
 ### Sessão
 
@@ -218,7 +221,7 @@ decide o evento ([`internal/cli/editar.go`](internal/cli/editar.go)):
 
 | Comando | task | deck | card | appointment |
 |---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V]` | `task.edited` | `deck.renamed` | `card.edited` | — |
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — |
 | `pnn apagar N` | `task.deleted` | ✗ arquive | ✗ arquive | `appointment.cancelled` |
 | `pnn arquivar N` | ✗ feito/apagar | `deck.archived` | `card.archived` | ✗ apagar |
 

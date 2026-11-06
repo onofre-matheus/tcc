@@ -1,0 +1,39 @@
+{
+  "name": "contagem por tag: herda as tags do deck, ignora cartão e deck arquivados, conta vencidos; tag de deck ativo sem cartões aparece zerada",
+  "projection": "tags",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": ["so"] } },
+    { "id": "evt-02", "type": "deck.created", "v": 1, "lc": 2, "ts": "2026-07-01T09:10:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2", "name": "Disciplina antiga", "tags": ["arquivada"] } },
+    { "id": "evt-03", "type": "card.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": ["prova-p2"] } },
+    { "id": "evt-04", "type": "card.created", "v": 1, "lc": 4, "ts": "2026-07-01T10:10:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "deck_id": "d1", "front": "f2", "back": "b2", "tags": [] } },
+    { "id": "evt-05", "type": "card.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:20:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "deck_id": "d1", "front": "f3", "back": "b3", "tags": ["descartada"] } },
+    { "id": "evt-06", "type": "card.created", "v": 2, "lc": 6, "ts": "2026-07-01T10:30:00Z", "device": "dev-a",
+      "payload": { "card_id": "c4", "front": "f4", "back": "b4", "tags": ["prova-p2"] } },
+    { "id": "evt-07", "type": "card.created", "v": 1, "lc": 7, "ts": "2026-07-01T10:40:00Z", "device": "dev-a",
+      "payload": { "card_id": "c5", "deck_id": "d2", "front": "f5", "back": "b5", "tags": ["redes"] } },
+    { "id": "evt-08", "type": "card.reviewed", "v": 1, "lc": 8, "ts": "2026-07-09T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-09", "type": "card.archived", "v": 1, "lc": 9, "ts": "2026-07-09T12:10:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3" } },
+    { "id": "evt-10", "type": "deck.archived", "v": 1, "lc": 10, "ts": "2026-07-09T12:20:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d2" } },
+    { "id": "evt-11", "type": "deck.created", "v": 1, "lc": 11, "ts": "2026-07-09T13:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d3", "name": "Próximo semestre", "tags": ["vazia"] } }
+  ],
+  "expected": {
+    "tags": {
+      "so": { "cards": 2, "due": 1 },
+      "prova-p2": { "cards": 2, "due": 1 },
+      "vazia": { "cards": 0, "due": 0 }
+    },
+    "names": ["prova-p2", "so", "vazia"]
+  }
+}

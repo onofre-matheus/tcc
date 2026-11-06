@@ -547,3 +547,45 @@ func TestRevisarEscPedeMotivoEInterrompe(t *testing.T) {
 		t.Fatal("interrompida sai sem pausa")
 	}
 }
+
+func TestRevisarTreinoEmiteCardPracticedSemMexerNaCaixa(t *testing.T) {
+	events, emit := recorder()
+	cards := twoCards()
+	cards[1].Practice = true
+	cards[1].Tags = []string{"so", "prova-p2"}
+	m := NewRevisar(RevisarConfig{SessionID: "r1", Cards: cards, Minutes: 25, PauseMinutes: 5, Emit: emit})
+	m.Init()
+
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	for _, msg := range []tea.Msg{enter, keyRunes("a")} { // c1: vencido
+		next, _ := m.Update(msg)
+		m = next.(Revisar)
+	}
+	view := m.View()
+	if !strings.Contains(view, "TREINO") || !strings.Contains(view, "não altera a caixa") || !strings.Contains(view, "#so #prova-p2") {
+		t.Fatalf("cartão de treino se anuncia como tal, com as tags:\n%s", view)
+	}
+	for _, msg := range []tea.Msg{enter, keyRunes("e")} { // c2: treino
+		next, _ := m.Update(msg)
+		m = next.(Revisar)
+	}
+
+	var reviewed, practiced []string
+	for _, e := range *events {
+		switch e.eventType {
+		case "card.reviewed":
+			reviewed = append(reviewed, e.payload["card_id"].(string))
+		case "card.practiced":
+			practiced = append(practiced, e.payload["card_id"].(string))
+			if e.payload["result"] != "wrong" || e.payload["session_id"] != "r1" {
+				t.Fatalf("card.practiced leva resultado e sessão: %v", e.payload)
+			}
+		}
+	}
+	if strings.Join(reviewed, ",") != "c1" || strings.Join(practiced, ",") != "c2" {
+		t.Fatalf("vencido → card.reviewed, treino → card.practiced; veio reviewed=%v practiced=%v", reviewed, practiced)
+	}
+	if m.Practiced != 1 || !strings.Contains(m.View(), "1 de treino") {
+		t.Fatalf("o resumo separa o treino:\n%s", m.View())
+	}
+}

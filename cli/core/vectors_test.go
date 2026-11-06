@@ -18,13 +18,14 @@ import (
 const permutationRuns = 5
 
 type vector struct {
-	Name         string          `json:"name"`
-	Projection   string          `json:"projection"`
-	Now          string          `json:"now"`
-	TZ           string          `json:"tz"`
-	Permutations bool            `json:"permutations"`
-	Events       []core.Event    `json:"events"`
-	Expected     json.RawMessage `json:"expected"`
+	Name         string           `json:"name"`
+	Projection   string           `json:"projection"`
+	Now          string           `json:"now"`
+	TZ           string           `json:"tz"`
+	Permutations bool             `json:"permutations"`
+	Params       core.StudyFilter `json:"params"` // opcional (§6)
+	Events       []core.Event     `json:"events"`
+	Expected     json.RawMessage  `json:"expected"`
 }
 
 func TestVectors(t *testing.T) {
@@ -53,7 +54,7 @@ func TestVectors(t *testing.T) {
 			}
 
 			run := func(t *testing.T, events []core.Event) {
-				got, err := fn(events, core.Params{Now: v.Now, TZ: v.TZ})
+				got, err := fn(events, core.Params{Now: v.Now, TZ: v.TZ, Study: v.Params})
 				if err != nil {
 					t.Fatal(err)
 				}

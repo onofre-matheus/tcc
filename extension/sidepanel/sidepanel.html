@@ -31,6 +31,20 @@
             <input id="checkinEvery" type="number" min="1" max="60" placeholder="—" aria-label="Check-in a cada quantos minutos" style="max-width: 64px" />
             <span class="meta grow">check-in “na tarefa?” a cada N min (vazio = sem)</span>
           </div>
+          <!-- Sessão personalizada (spec §4.11): filtra a revisão por deck e/ou
+               tags (E entre os dois); o treino livre inclui os não vencidos. -->
+          <details id="reviewFilter" style="margin-top: 8px">
+            <summary class="meta">Filtrar revisão (deck, tags, treino)</summary>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px">
+              <select id="reviewDeckSel" aria-label="Deck da revisão">
+                <option value="">todos os decks</option>
+              </select>
+              <input id="reviewTags" list="tagSuggestions" placeholder="#tags (so inclui so/…)" aria-label="Tags da revisão" />
+              <label class="meta" title="Depois dos vencidos, revisa também os que ainda não venceram. A resposta é registrada como treino e não muda a caixa do cartão.">
+                <input type="checkbox" id="reviewPractice" /> treino livre: inclui os não vencidos (não mexe nas caixas)
+              </label>
+            </div>
+          </details>
           <div class="row" style="margin-top: 8px">
             <button class="btn" id="startFocus">Iniciar foco</button>
             <button class="btn primary" id="startReview">Revisar flashcards</button>
@@ -124,6 +138,7 @@
       <section class="panel">
         <h2>Decks</h2>
         <div id="decks"></div>
+        <div id="tagChips" class="tag-chips"></div>
         <form id="deckForm" class="row" style="margin-top: 8px">
           <input id="deckName" placeholder="Novo deck (use :: para sub-deck)" required />
           <button class="btn sm" type="submit">+</button>
@@ -133,12 +148,15 @@
           <input id="cardFront" placeholder="Frente (pergunta)" required />
           <input id="cardBack" placeholder="Verso (resposta)" required />
           <input id="cardSource" type="url" placeholder="Fonte (URL) — opcional" />
+          <input id="cardTags" list="tagSuggestions" placeholder="#tags — opcional (espaço ou vírgula; / cria hierarquia)" aria-label="Tags do cartão" />
           <button class="btn sm" type="submit">Adicionar cartão</button>
         </form>
       </section>
       <!-- Sincronização (mesmo bucket que a CLI) -->
       <section class="panel" id="syncPanel"></section>
     </main>
+
+    <datalist id="tagSuggestions"></datalist>
 
     <footer class="debug-bar" id="debugBar"></footer>
 

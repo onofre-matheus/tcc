@@ -1,6 +1,7 @@
 // `pnn carta [deck]` — criação de cartões em série (modo AZUL): escolhe o deck
-// (se não veio por argumento), depois frente → verso → fonte opcional; cada
-// confirmação emite card.created e reinicia o formulário para o próximo.
+// (se não veio por argumento; "(sem deck)" cria cartão solto), depois frente →
+// verso → fonte opcional → tags opcionais; cada confirmação emite card.created
+// e reinicia o formulário para o próximo, mantendo as tags da série.
 package tui
 
 import (
@@ -8,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/onofre-matheus/tcc/cli/core"
 	"github.com/onofre-matheus/tcc/cli/store"
 )
 
@@ -15,8 +17,13 @@ type CartaConfig struct {
 	Decks    []DeckOption
 	DeckID   string // preenchidos quando o deck veio por argumento
 	DeckName string
+	NoDeck   bool     // deck escolhido de antemão: nenhum (cartão solto)
+	Tags     []string // tags iniciais da série (--tag), já normalizadas
 	GenID    func() string
 	Emit     func(eventType string, payload map[string]any) error
+	// EmitV emite com versão explícita (card.created v2, sem deck). Ausente,
+	// degrada para Emit.
+	EmitV func(eventType string, v int, payload map[string]any) error
 }
 
 type cartaStage int
@@ -33,6 +40,7 @@ type Carta struct {
 	form     miniForm
 	deckID   string
 	deckName string
+	tags     string // valor do campo de tags, mantido entre os cartões da série
 	flash    string
 	Created  int
 	Err      error
@@ -42,20 +50,28 @@ func NewCarta(cfg CartaConfig) Carta {
 	if cfg.GenID == nil {
 		cfg.GenID = store.UUIDv7
 	}
-	m := Carta{cfg: cfg, picker: newDeckPicker(cfg.Decks)}
-	if cfg.DeckID != "" {
+	if cfg.EmitV == nil {
+		cfg.EmitV = degradeEmitV(cfg.Emit)
+	}
+	m := Carta{cfg: cfg, picker: newDeckPicker(withNoDeck(cfg.Decks)), tags: tagsLine(cfg.Tags)}
+	switch {
+	case cfg.DeckID != "":
 		m.deckID, m.deckName = cfg.DeckID, cfg.DeckName
 		m.stage = cartaEditing
-		m.form = newCardForm("")
+	case cfg.NoDeck || len(cfg.Decks) == 0: // sem decks, o picker só teria "(sem deck)"
+		m.deckName = NoDeck.Name
+		m.stage = cartaEditing
 	}
+	m.form = newCardForm("", m.tags)
 	return m
 }
 
-func newCardForm(front string) miniForm {
+func newCardForm(front, tags string) miniForm {
 	return newMiniForm(
 		formField{Label: "Frente", Placeholder: "pergunta ou conceito", Value: front, Required: true},
 		formField{Label: "Verso", Placeholder: "resposta", Required: true},
 		formField{Label: "Fonte (URL, opcional)", Placeholder: "https://…"},
+		formField{Label: "Tags (opcional)", Placeholder: "#so #prova-p2 (espaço ou vírgula; / cria hierarquia)", Value: tags},
 	)
 }
 
@@ -79,7 +95,7 @@ func (m Carta) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if chosen != nil {
 				m.deckID, m.deckName = chosen.ID, chosen.Name
 				m.stage = cartaEditing
-				m.form = newCardForm("")
+				m.form = newCardForm("", m.tags)
 			}
 			return m, nil
 		}
@@ -93,21 +109,21 @@ func (m Carta) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		values := m.form.values()
 		payload := map[string]any{
 			"card_id": m.cfg.GenID(),
-			"deck_id": m.deckID,
 			"front":   values[0],
 			"back":    values[1],
-			"tags":    []string{},
 		}
 		if values[2] != "" {
 			payload["source_url"] = values[2]
 		}
-		if err := m.cfg.Emit("card.created", payload); err != nil {
+		tags := core.ParseTags(values[3])
+		if err := emitCardCreated(m.cfg.Emit, m.cfg.EmitV, payload, m.deckID, tags); err != nil {
 			m.Err = err
 			return m, tea.Quit
 		}
 		m.Created++
 		m.flash = "✔ cartão criado — próximo (Esc sai)"
-		m.form = newCardForm("")
+		m.tags = tagsLine(tags)
+		m.form = newCardForm("", m.tags)
 		return m, nil
 	}
 

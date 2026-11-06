@@ -34,6 +34,7 @@ func NewRoot(a *app.App) *cobra.Command {
 		newCartasCmd(a),
 		newDecksCmd(a),
 		newDeckCmd(a),
+		newTagsCmd(a),
 		newAgendaCmd(a),
 		newEditarCmd(a),
 		newApagarCmd(a),

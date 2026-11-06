@@ -13,7 +13,7 @@ const maxBox = 5
 var intervalDays = [maxBox + 1]int{0, 1, 3, 7, 14, 30}
 
 type LeitnerCard struct {
-	DeckID           string   `json:"deck_id"`
+	DeckID           *string  `json:"deck_id"` // nil = cartão solto (card.created v2 sem deck)
 	Box              int      `json:"box"`
 	Due              string   `json:"due"`
 	Front            string   `json:"front"`
@@ -25,6 +25,14 @@ type LeitnerCard struct {
 	ExplanationCount int      `json:"explanation_count"`
 	LastFrame        string   `json:"last_frame"` // último andaime; ausente ≡ "feynman"
 	Archived         bool     `json:"archived"`
+}
+
+// Deck devolve o deck_id ou "" para o cartão solto.
+func (c LeitnerCard) Deck() string {
+	if c.DeckID == nil {
+		return ""
+	}
+	return *c.DeckID
 }
 
 type LeitnerState struct {
@@ -53,7 +61,7 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 		case "card.created":
 			pl, err := decodePayload[struct {
 				CardID      string   `json:"card_id"`
-				DeckID      string   `json:"deck_id"`
+				DeckID      *string  `json:"deck_id"` // v2: opcional
 				Front       string   `json:"front"`
 				Back        string   `json:"back"`
 				SourceURL   *string  `json:"source_url"`
@@ -67,6 +75,9 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 			if err != nil {
 				return LeitnerState{}, err
 			}
+			if pl.DeckID != nil && *pl.DeckID == "" {
+				pl.DeckID = nil
+			}
 			card := &cardState{
 				LeitnerCard: LeitnerCard{
 					DeckID:      pl.DeckID,
@@ -76,7 +87,7 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 					Back:        pl.Back,
 					SourceURL:   pl.SourceURL,
 					SourceTitle: pl.SourceTitle,
-					Tags:        orEmpty(pl.Tags),
+					Tags:        NormalizeTags(pl.Tags),
 					LastFrame:   "feynman",
 				},
 				id:        pl.CardID,
@@ -107,8 +118,11 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 				card.Back = *pl.Back
 			}
 			if pl.Tags != nil {
-				card.Tags = orEmpty(*pl.Tags)
+				card.Tags = NormalizeTags(*pl.Tags)
 			}
+
+		// card.practiced (treino fora do vencimento) é ignorado de propósito:
+		// estudar antes da hora não promove nem regride o cartão.
 
 		case "card.archived":
 			pl, err := decodePayload[struct {
@@ -187,7 +201,7 @@ func Leitner(events []Event, p Params) (LeitnerState, error) {
 
 	var due []*cardState
 	for _, card := range order {
-		if card.Due <= today && !card.Archived && !archivedDecks[card.DeckID] {
+		if card.Due <= today && !card.Archived && !archivedDecks[card.Deck()] {
 			due = append(due, card)
 		}
 	}

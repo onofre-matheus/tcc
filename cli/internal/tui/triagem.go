@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/onofre-matheus/tcc/cli/core"
 	"github.com/onofre-matheus/tcc/cli/store"
 )
 
@@ -25,6 +26,9 @@ type TriagemConfig struct {
 	Decks []DeckOption
 	GenID func() string
 	Emit  func(eventType string, payload map[string]any) error
+	// EmitV emite com versão explícita (card.created v2, sem deck). Ausente,
+	// degrada para Emit.
+	EmitV func(eventType string, v int, payload map[string]any) error
 }
 
 type triageStage int
@@ -51,7 +55,10 @@ func NewTriagem(cfg TriagemConfig) Triagem {
 	if cfg.GenID == nil {
 		cfg.GenID = store.UUIDv7
 	}
-	return Triagem{cfg: cfg, picker: newDeckPicker(cfg.Decks)}
+	if cfg.EmitV == nil {
+		cfg.EmitV = degradeEmitV(cfg.Emit)
+	}
+	return Triagem{cfg: cfg, picker: newDeckPicker(withNoDeck(cfg.Decks))}
 }
 
 func (m Triagem) Init() tea.Cmd {
@@ -84,6 +91,7 @@ func (m Triagem) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.form = newMiniForm(
 					formField{Label: "Frente", Placeholder: "pergunta ou conceito", Value: m.item().Text, Required: true},
 					formField{Label: "Verso", Placeholder: "resposta", Required: true},
+					formField{Label: "Tags (opcional)", Placeholder: "#so #prova-p2"},
 				)
 				m.stage = triageCardForm
 			}
@@ -118,8 +126,8 @@ func (m Triagem) updateChoose(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	item := m.item()
 	switch msg.String() {
 	case "c":
-		if item.Kind == "note" && len(m.cfg.Decks) > 0 {
-			m.picker = newDeckPicker(m.cfg.Decks)
+		if item.Kind == "note" {
+			m.picker = newDeckPicker(withNoDeck(m.cfg.Decks))
 			m.stage = triagePickDeck
 		}
 		return m, nil
@@ -175,10 +183,8 @@ func (m Triagem) noteToCard() (tea.Model, tea.Cmd) {
 	cardID := m.cfg.GenID()
 	payload := map[string]any{
 		"card_id": cardID,
-		"deck_id": m.deckID,
 		"front":   values[0],
 		"back":    values[1],
-		"tags":    []string{},
 	}
 	if item.URL != nil {
 		payload["source_url"] = *item.URL
@@ -186,7 +192,7 @@ func (m Triagem) noteToCard() (tea.Model, tea.Cmd) {
 	if item.PageTitle != nil {
 		payload["source_title"] = *item.PageTitle
 	}
-	if err := m.cfg.Emit("card.created", payload); err != nil {
+	if err := emitCardCreated(m.cfg.Emit, m.cfg.EmitV, payload, m.deckID, core.ParseTags(values[2])); err != nil {
 		m.Err = err
 		return m, tea.Quit
 	}

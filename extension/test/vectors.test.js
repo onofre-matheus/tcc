@@ -10,6 +10,8 @@ import { project as stats } from "../core/stats.js";
 import { project as inbox } from "../core/inbox.js";
 import { project as calendar, reminders } from "../core/calendar.js";
 import { project as review } from "../core/review.js";
+import { project as tags } from "../core/tags.js";
+import { project as study } from "../core/study.js";
 
 const vectorsDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -38,6 +40,11 @@ function runProjection(vector, events) {
       return reminders(events, { now: vector.now, tz: vector.tz });
     case "review":
       return review(events, { now: vector.now, tz: vector.tz });
+    case "tags":
+      return tags(events, { now: vector.now, tz: vector.tz });
+    case "study":
+      // §6: "params" (opcional) carrega o filtro da sessão personalizada.
+      return study(events, { now: vector.now, tz: vector.tz, ...(vector.params ?? {}) });
     default:
       throw new Error(`projeção desconhecida: ${vector.projection}`);
   }

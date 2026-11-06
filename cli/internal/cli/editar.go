@@ -6,7 +6,9 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/onofre-matheus/tcc/cli/core"
@@ -23,13 +25,34 @@ func resolveRef(a *app.App, arg string) (app.ViewRef, error) {
 	return a.ResolveView(n)
 }
 
+// tagEdit descreve a edição de tags de um cartão: --tags substitui a lista
+// (vazia limpa), --tag acrescenta, --untag remove. O evento leva a lista
+// final inteira — tags é um campo só no LWW por campo do card.edited.
+type tagEdit struct {
+	replace    *string
+	add, untag []string
+}
+
+func (e tagEdit) any() bool { return e.replace != nil || len(e.add) > 0 || len(e.untag) > 0 }
+
+func (e tagEdit) apply(current []string) []string {
+	tags := current
+	if e.replace != nil {
+		tags = core.ParseTags(*e.replace)
+	}
+	tags = core.NormalizeTags(append(slices.Clone(tags), e.add...))
+	remove := core.NormalizeTags(e.untag)
+	return slices.DeleteFunc(tags, func(t string) bool { return slices.Contains(remove, t) })
+}
+
 func newEditarCmd(a *app.App) *cobra.Command {
-	var data, frente, verso string
+	var data, frente, verso, tagsFlag string
+	var tags tagEdit
 	cmd := &cobra.Command{
 		Use:   `editar N ["novo texto"]`,
 		Short: "edita o item N da última tela (task.edited, deck.renamed, card.edited)",
 		Args:  cobra.RangeArgs(1, 2),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
 			if err != nil {
 				return err
@@ -37,6 +60,12 @@ func newEditarCmd(a *app.App) *cobra.Command {
 			text := ""
 			if len(args) == 2 {
 				text = args[1]
+			}
+			if c.Flags().Changed("tags") {
+				tags.replace = &tagsFlag
+			}
+			if ref.Kind != "card" && tags.any() {
+				return fmt.Errorf("--tags/--tag/--untag valem para cartões (deck tem tags fixas na criação)")
 			}
 			switch ref.Kind {
 			case "task":
@@ -51,9 +80,9 @@ func newEditarCmd(a *app.App) *cobra.Command {
 				return renomearDeck(a, ref.ID, text)
 			case "card":
 				if text != "" {
-					return fmt.Errorf("cartão se edita por campo: use --frente e/ou --verso")
+					return fmt.Errorf("cartão se edita por campo: use --frente, --verso e/ou --tag/--untag/--tags")
 				}
-				return editarCartao(a, ref.ID, frente, verso)
+				return editarCartao(a, ref.ID, frente, verso, tags)
 			}
 			return fmt.Errorf("o item %s da última tela não é editável", args[0])
 		},
@@ -61,6 +90,9 @@ func newEditarCmd(a *app.App) *cobra.Command {
 	cmd.Flags().StringVar(&data, "data", "", "novo prazo AAAA-MM-DD (tarefa)")
 	cmd.Flags().StringVar(&frente, "frente", "", "nova frente (cartão)")
 	cmd.Flags().StringVar(&verso, "verso", "", "novo verso (cartão)")
+	cmd.Flags().StringVar(&tagsFlag, "tags", "", `substitui as tags do cartão ("so prova-p2"; "" limpa)`)
+	cmd.Flags().StringSliceVar(&tags.add, "tag", nil, "acrescenta tag ao cartão (repetível)")
+	cmd.Flags().StringSliceVar(&tags.untag, "untag", nil, "remove tag do cartão (repetível)")
 	return cmd
 }
 
@@ -189,9 +221,9 @@ func renomearDeck(a *app.App, id, name string) error {
 	return nil
 }
 
-func editarCartao(a *app.App, id, frente, verso string) error {
-	if frente == "" && verso == "" {
-		return fmt.Errorf("nada para editar — use --frente e/ou --verso")
+func editarCartao(a *app.App, id, frente, verso string, tags tagEdit) error {
+	if frente == "" && verso == "" && !tags.any() {
+		return fmt.Errorf("nada para editar — use --frente, --verso e/ou --tag/--untag/--tags")
 	}
 	card, err := cardByRef(a, id)
 	if err != nil {
@@ -205,10 +237,28 @@ func editarCartao(a *app.App, id, frente, verso string) error {
 	if verso != "" {
 		payload["back"] = verso
 	}
+	if tags.any() {
+		if next := tags.apply(card.Tags); !slices.Equal(next, card.Tags) {
+			payload["tags"] = next
+			card.Tags = next
+		}
+	}
+	if len(payload) == 1 {
+		fmt.Fprintf(a.Out, "nada mudou: %s\n", card.Front)
+		return nil
+	}
 	if _, err := a.Store.Append("card.edited", payload); err != nil {
 		return err
 	}
-	fmt.Fprintf(a.Out, "✔ cartão editado: %s\n", card.Front)
+	fmt.Fprintf(a.Out, "✔ cartão editado: %s", card.Front)
+	if _, ok := payload["tags"]; ok {
+		if len(card.Tags) == 0 {
+			fmt.Fprint(a.Out, "  (sem tags)")
+		} else {
+			fmt.Fprintf(a.Out, "  #%s", strings.Join(card.Tags, " #"))
+		}
+	}
+	fmt.Fprintln(a.Out)
 	return nil
 }
 

@@ -52,3 +52,43 @@ func (p deckPicker) view() string {
 	}
 	return b.String()
 }
+
+// NoDeck é a opção "(sem deck)" do seletor: o cartão nasce solto, organizado
+// só pelas tags (card.created v2 sem deck_id). Fica no fim da lista para o
+// Enter imediato continuar escolhendo o primeiro deck, como antes.
+var NoDeck = DeckOption{ID: "", Name: "(sem deck)"}
+
+func withNoDeck(options []DeckOption) []DeckOption {
+	return append(append([]DeckOption(nil), options...), NoDeck)
+}
+
+// emitCardCreated grava o card.created: com deck, o payload v1 de sempre; sem
+// deck, v2 sem o campo deck_id (spec/SPEC.md §3). Tags já normalizadas.
+func emitCardCreated(
+	emit func(string, map[string]any) error,
+	emitV func(string, int, map[string]any) error,
+	payload map[string]any, deckID string, tags []string,
+) error {
+	payload["tags"] = tags
+	if deckID != "" {
+		payload["deck_id"] = deckID
+		return emit("card.created", payload)
+	}
+	return emitV("card.created", 2, payload)
+}
+
+// degradeEmitV: sem EmitV configurado, emite pelo Emit comum (os testes
+// antigos seguem válidos), como na revisão.
+func degradeEmitV(emit func(string, map[string]any) error) func(string, int, map[string]any) error {
+	return func(eventType string, _ int, payload map[string]any) error {
+		return emit(eventType, payload)
+	}
+}
+
+// tagsLine formata as tags para exibição ("#so #prova-p2").
+func tagsLine(tags []string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	return "#" + strings.Join(tags, " #")
+}

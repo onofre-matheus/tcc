@@ -111,7 +111,7 @@ em `last-view.json` decide o evento:
 
 | Comando | task (dia) | deck (decks) | card (cartas) | appointment (agenda) |
 |---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V]` | `task.edited` | `deck.renamed` | `card.edited` | — |
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — |
 | `pnn apagar N` | `task.deleted` | ✗ (arquive) | ✗ (arquive) | `appointment.cancelled` |
 | `pnn arquivar N` | ✗ (feito/apagar) | `deck.archived` | `card.archived` | ✗ (apagar) |
 
@@ -120,6 +120,10 @@ compromisso cancelado não têm valor histórico), **arquivar preserva** (o
 histórico de estudo de cartões e decks fica; eles apenas saem da fila).
 `pnn decks --arquivados` e `pnn cartas --arquivados` mostram o acervo
 arquivado.
+
+Tags de cartão (catálogo 1.3): `--tag` acrescenta, `--untag` remove e `--tags`
+substitui a lista (`--tags ""` limpa). O `card.edited` leva a **lista final
+inteira** — `tags` é um campo só no LWW por campo. Nada mudou, nada é gravado.
 
 ### Captura e triagem (RF02, RF06, RF09)
 
@@ -130,7 +134,7 @@ arquivado.
 | `pnn triagem` | `note.triaged` / `distraction.triaged` (+ `card.created` / `task.created`) |
 
 `pnn triagem` é interativa, **um item por vez**: `[c]artão` (escolhe deck na
-árvore), `[t]arefa`, `[d]escartar`, `[s]eguir`. Esvazia a lista temporária ao
+árvore ou "(sem deck)"; tags opcionais), `[t]arefa`, `[d]escartar`, `[s]eguir`. Esvazia a lista temporária ao
 final (RF06).
 
 ### Estudo (RF08, RF09, RF11)
@@ -139,9 +143,24 @@ final (RF06).
 |---|---|
 | `pnn decks` | — (decks + leitner; árvore `::` com vencidos por deck, numerada) |
 | `pnn deck "Pai::Filho"` | `deck.created` |
-| `pnn carta [deck]` | `card.created` (interativo: frente, verso, fonte opcional) |
-| `pnn cartas [deck]` | — (manutenção do acervo: numera os cartões para editar/arquivar) |
-| `pnn revisar [deck]` | `session.started/ended`, `card.explained`, `card.reviewed` |
+| `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (interativo: frente, verso, fonte e tags opcionais; v2 sem deck) |
+| `pnn cartas [deck] [--tag T]…` | — (manutenção do acervo: numera os cartões para editar/arquivar) |
+| `pnn tags` | — (tags em árvore `/`, com cartões e vencidos de cada uma) |
+| `pnn revisar [deck] [--tag T]… [--treino]` | `session.started/ended`, `card.explained`, `card.reviewed` (+ `card.practiced` no treino) |
+
+**Tags livres e cartão solto (catálogo 1.3)**: o deck é opcional — no seletor
+de `pnn carta`/triagem, "(sem deck)" (último item) cria o cartão organizado só
+por tags (`card.created` v2 sem `deck_id`); sem nenhum deck, o formulário abre
+direto assim. O campo de tags aceita espaço ou vírgula, com ou sem `#`, e `/`
+para hierarquia (`so/escalonamento`); fica preenchido para o próximo cartão da
+série. Tags efetivas = as do cartão ∪ as do deck.
+
+**Sessão personalizada (SPEC §4.11)**: `pnn revisar` filtra a fila por deck
+(subárvore `::`) e/ou `--tag` (inclui as descendentes `/`; várias = qualquer
+uma); deck e tag juntos combinam com E. `--treino` acrescenta, depois dos
+vencidos, os **não vencidos** que casam: a TUI marca `TREINO · não altera a
+caixa`, e a resposta vira `card.practiced` — estudar antes da hora não promove
+o cartão. `pnn cartas --tag` usa a mesma regra para listar o acervo.
 
 Fluxo de revisão (TUI vermelha): frente → campo "explique com suas palavras"
 (Feynman; vazio = pular) → revela verso + explicação anterior para comparar →

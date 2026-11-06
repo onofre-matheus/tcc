@@ -1,0 +1,16 @@
+{
+  "name": "tags de deck saem normalizadas (minúsculas, sem #, espaço vira -, sem duplicatas)",
+  "projection": "decks",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "Redes", "tags": ["#Redes", " Prova  P2 ", "redes", "#"] } }
+  ],
+  "expected": {
+    "decks": {
+      "d1": { "name": "Redes", "tags": ["redes", "prova-p2"] }
+    }
+  }
+}

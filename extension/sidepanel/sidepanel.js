@@ -9,8 +9,8 @@ document.querySelector("#brand").insertAdjacentHTML("afterbegin", MASCOT_SVG);
 
 // Estado local (não é projeção): sessão de foco e a revisão em andamento.
 let session = null; // { id, kind, endMs, interval }
-let review = null; // { queue, index, cards, revealed }
-let selectedDeck = "";
+let review = null; // { queue, practiceFrom, index, cards, decks, deckId, revealed }
+let selectedDeck = null; // deck do formulário de cartão: null = ainda não escolhido; "" = (sem deck)
 let dayTasks = { tasks: {}, day_list: [] }; // para o seletor de tarefa do foco
 
 // Check-in de atenção (self-monitoring, Safren): o alarme dispara no service
@@ -209,10 +209,50 @@ async function togglePause() {
 $("pauseBtn").onclick = togglePause;
 
 $("startFocus").onclick = () => beginSession("task", "Foco");
+// ---------- Sessão personalizada (spec §4.11) ----------
+// Filtro: deck (subárvore "::") E tags (cada uma inclui as descendentes "/").
+// O treino livre acrescenta os não vencidos depois da fila; a resposta deles
+// vira card.practiced, que não mexe na caixa.
+function reviewFilter() {
+  const deck = $("reviewDeckSel").value;
+  return { decks: deck ? [deck] : [], tags: store.parseTags($("reviewTags").value) };
+}
+
+async function updateReviewButton() {
+  const filter = reviewFilter();
+  const st = await store.state.study(filter);
+  const practice = $("reviewPractice").checked ? st.practice.length : 0;
+  const filtered = filter.decks.length > 0 || filter.tags.length > 0;
+  const total = st.queue.length + practice;
+  // Nada a revisar: a sessão seria para nada — o botão desabilita e o
+  // destaque primário passa para "Iniciar foco".
+  const rev = $("startReview");
+  rev.textContent = `Revisar flashcards (${st.queue.length}${practice ? ` + ${practice} treino` : ""})${filtered ? " · filtrado" : ""}`;
+  rev.disabled = total === 0;
+  rev.classList.toggle("primary", total > 0);
+  rev.classList.toggle("ghost", total === 0);
+  $("startFocus").classList.toggle("primary", total === 0);
+}
+$("reviewDeckSel").onchange = updateReviewButton;
+$("reviewTags").oninput = updateReviewButton;
+$("reviewPractice").onchange = updateReviewButton;
+
 $("startReview").onclick = async () => {
-  const lt = await store.state.leitner();
-  review = { queue: [...lt.queue], index: 0, cards: lt.cards, revealed: false };
-  await beginSession("review", "Revisão");
+  const filter = reviewFilter();
+  const [st, lt, dk] = await Promise.all([
+    store.state.study(filter), store.state.leitner(), store.state.decks(),
+  ]);
+  const practice = $("reviewPractice").checked ? st.practice : [];
+  review = {
+    queue: [...st.queue, ...practice],
+    practiceFrom: st.queue.length, // daqui em diante, treino (card.practiced)
+    index: 0,
+    cards: lt.cards,
+    decks: dk.decks,
+    deckId: filter.decks[0], // alvo da sessão (target_id), quando filtrada por deck
+    revealed: false,
+  };
+  await beginSession("review", practice.length ? "Revisão + treino" : "Revisão");
   $("reviewPanel").hidden = false;
   renderCard();
 };
@@ -262,8 +302,15 @@ function renderCard() {
   card.hidden = false;
   review.revealed = false;
   const c = review.cards[review.queue[review.index]];
+  const practice = review.index >= review.practiceFrom;
   $("cardFace").innerHTML = esc(c.front ?? "");
-  $("cardDeck").textContent = `caixa ${c.box}`;
+  // Deck, caixa e o aviso de treino em texto (a cor nunca é o único sinal);
+  // tags efetivas (cartão ∪ deck) logo abaixo.
+  const deckName = c.deck_id ? review.decks[c.deck_id]?.name ?? "" : "(sem deck)";
+  const tags = store.effectiveTags(c, review.decks);
+  $("cardDeck").innerHTML =
+    `${esc(deckName)} · caixa ${c.box}${practice ? " · <strong>treino</strong> (não altera a caixa)" : ""}` +
+    (tags.length ? `<div class="card-tags">${tags.map((t) => `<span class="tag">#${esc(t)}</span>`).join(" ")}</div>` : "");
   $("cardSrc").innerHTML = "";
   // Explicação em branco + a anterior (se houver) para comparar. O método volta
   // ao último usado no cartão (last_frame), default Feynman.
@@ -298,7 +345,8 @@ $("reveal").onclick = async () => {
 };
 async function grade(result) {
   const cardId = review.queue[review.index];
-  await store.reviewCard(cardId, result, session?.id);
+  const practice = review.index >= review.practiceFrom;
+  await (practice ? store.practiceCard : store.reviewCard)(cardId, result, session?.id);
   review.index++;
   renderCard();
 }
@@ -317,9 +365,14 @@ $("editCard").onclick = async () => {
   if (front === null) return;
   const back = window.prompt("Verso:", c.back ?? "");
   if (back === null) return;
+  const tagsIn = window.prompt("Tags (espaço ou vírgula; vazio limpa):", (c.tags ?? []).map((t) => `#${t}`).join(" "));
+  if (tagsIn === null) return;
   const fields = {};
   if (front.trim() && front.trim() !== c.front) fields.front = front.trim();
   if (back.trim() && back.trim() !== c.back) fields.back = back.trim();
+  // tags é um campo só no LWW do card.edited: vai a lista final inteira.
+  const tags = store.parseTags(tagsIn);
+  if (tags.join(" ") !== (c.tags ?? []).join(" ")) fields.tags = tags;
   if (!Object.keys(fields).length) return;
   await store.editCard(cardId, fields);
   Object.assign(c, fields); // reflete na revisão em andamento
@@ -377,12 +430,13 @@ function renderInbox(inb) {
   on("[data-note-drop]", (el) => store.triageNote(el.dataset.noteDrop, "discarded"));
   on("[data-note-card]", async (el) => {
     const id = el.dataset.noteCard;
-    if (!selectedDeck) { alert("Crie/escolha um deck primeiro (seção Decks)."); return; }
     const n = lastInbox.notes[id];
-    const source = {};
-    if (n?.url) source.source_url = n.url; // preserva a referência de origem
-    if (n?.page_title) source.source_title = n.page_title;
-    const card = await store.createCard(selectedDeck, n?.text ?? "", "(preencher o verso)", source);
+    // Deck e tags vêm do formulário de cartão (seção Decks); "(sem deck)"
+    // cria o cartão solto, organizado só pelas tags.
+    const extra = { tags: store.parseTags($("cardTags").value) };
+    if (n?.url) extra.source_url = n.url; // preserva a referência de origem
+    if (n?.page_title) extra.source_title = n.page_title;
+    const card = await store.createCard(selectedDeck || null, n?.text ?? "", "(preencher o verso)", extra);
     await store.triageNote(id, "to_card", { card_id: card });
   });
   on("[data-dis-done]", (el) => store.triageDistraction(el.dataset.disDone, "done"));
@@ -509,16 +563,43 @@ function renderDecks(dk, lt) {
 
   const sel = $("cardDeckSel");
   const real = flattenReal(tree, 0, []);
-  sel.innerHTML = real
+  const deckOptions = real
     .map((d) => `<option value="${d.id}">${"  ".repeat(d.depth)}${esc(d.path)}</option>`)
     .join("");
-  if (real.length) {
-    if (!real.some((d) => d.id === selectedDeck)) selectedDeck = real[0].id;
-    sel.value = selectedDeck;
-  } else selectedDeck = "";
-  // Sem deck não há onde criar cartão: um formulário com seletor vazio parece
-  // quebrado — só aparece quando existe ao menos um deck real.
-  $("cardForm").style.display = real.length ? "flex" : "none";
+  // "(sem deck)" fica no fim: o cartão solto vive só das tags (catálogo 1.3).
+  // Sem nenhum deck, é a única opção — o formulário aparece mesmo assim.
+  sel.innerHTML = `${deckOptions}<option value="">(sem deck)</option>`;
+  if (selectedDeck === null || (selectedDeck !== "" && !real.some((d) => d.id === selectedDeck))) {
+    selectedDeck = real[0]?.id ?? "";
+  }
+  sel.value = selectedDeck;
+
+  // Seletor de deck do filtro da revisão: mesma árvore, "todos" por padrão.
+  const rsel = $("reviewDeckSel");
+  const prev = rsel.value;
+  rsel.innerHTML = `<option value="">todos os decks</option>${deckOptions}`;
+  rsel.value = real.some((d) => d.id === prev) ? prev : "";
+}
+
+// Tags livres (spec §4.10): chips com cartões e vencidos de cada tag; clicar
+// num chip filtra a revisão por ela. As mesmas tags alimentam as sugestões
+// dos campos de tag (datalist).
+function renderTags(tg) {
+  $("tagSuggestions").innerHTML = tg.names.map((t) => `<option value="#${esc(t)}"></option>`).join("");
+  const chips = tg.names.map((t) => {
+    const { cards, due } = tg.tags[t];
+    const dueLabel = due ? ` · <span class="due">${plural(due, "vencido", "vencidos")}</span>` : "";
+    return `<button type="button" class="btn ghost sm chip" data-tag="${esc(t)}" title="Filtrar a revisão por #${esc(t)}">#${esc(t)} · ${cards}${dueLabel}</button>`;
+  });
+  $("tagChips").innerHTML = chips.length ? `<span class="meta">Tags:</span> ${chips.join("")}` : "";
+  $("tagChips").querySelectorAll("[data-tag]").forEach((el) => {
+    el.onclick = () => {
+      $("reviewTags").value = `#${el.dataset.tag}`;
+      $("reviewFilter").open = true;
+      updateReviewButton();
+      $("focusPanel").scrollIntoView({ behavior: "smooth" });
+    };
+  });
 }
 $("cardDeckSel").onchange = (e) => { selectedDeck = e.target.value; };
 $("deckForm").onsubmit = async (e) => {
@@ -532,9 +613,11 @@ $("deckForm").onsubmit = async (e) => {
 $("cardForm").onsubmit = async (e) => {
   e.preventDefault();
   const front = $("cardFront").value.trim(), back = $("cardBack").value.trim();
-  if (!front || !back || !selectedDeck) return;
+  if (!front || !back) return;
   const url = $("cardSource").value.trim();
-  await store.createCard(selectedDeck, front, back, url ? { source_url: url } : {});
+  const extra = { tags: store.parseTags($("cardTags").value), ...(url ? { source_url: url } : {}) };
+  await store.createCard(selectedDeck || null, front, back, extra);
+  // As tags ficam para o próximo cartão da série (como na CLI).
   $("cardFront").value = ""; $("cardBack").value = ""; $("cardSource").value = "";
 };
 
@@ -603,9 +686,10 @@ function renderFocusTasks(t) {
 
 // ---------- Refresh geral ----------
 async function refresh() {
-  const [s, inb, dk, lt, tk, mins] = await Promise.all([
+  const [s, inb, dk, lt, tk, mins, tg] = await Promise.all([
     store.state.stats(), store.state.inbox(), store.state.decks(),
     store.state.leitner(), store.state.tasks(), store.state.attentionMinutes(),
+    store.state.tags(),
   ]);
   lastInbox = inb;
   const flame = s.streak > 0 ? "🔥" : "•";
@@ -615,16 +699,9 @@ async function refresh() {
   renderFocusTasks(tk);
   renderInbox(inb);
   renderDecks(dk, lt);
+  renderTags(tg);
   await renderWeek();
-  // Fila vazia: revisar não leva a lugar nenhum (sessão para nada) — o botão
-  // desabilita e o destaque primário passa para "Iniciar foco".
-  const hasDue = lt.queue.length > 0;
-  const rev = $("startReview");
-  rev.textContent = `Revisar flashcards (${lt.queue.length})`;
-  rev.disabled = !hasDue;
-  rev.classList.toggle("primary", hasDue);
-  rev.classList.toggle("ghost", !hasDue);
-  $("startFocus").classList.toggle("primary", !hasDue);
+  await updateReviewButton();
 }
 
 store.onChange(refresh);

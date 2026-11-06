@@ -43,6 +43,7 @@ func TestCartaCriaCartaoComFonte(t *testing.T) {
 		keyRunes("O que é limite?"), tea.KeyMsg{Type: tea.KeyEnter},
 		keyRunes("O valor de convergência."), tea.KeyMsg{Type: tea.KeyEnter},
 		keyRunes("https://exemplo.dev"), tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyEnter}, // tags vazias
 	}
 	for _, msg := range steps {
 		next, _ := m.Update(msg)
@@ -76,13 +77,17 @@ func TestCartaFonteVaziaNaoViraCampo(t *testing.T) {
 		keyRunes("frente"), tea.KeyMsg{Type: tea.KeyEnter},
 		keyRunes("verso"), tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEnter}, // fonte vazia = sem fonte
+		tea.KeyMsg{Type: tea.KeyEnter}, // tags vazias
 	}
 	for _, msg := range steps {
 		next, _ := m.Update(msg)
 		m = next.(Carta)
 	}
 
-	created, _ := find(*events, "card.created")
+	created, ok := find(*events, "card.created")
+	if !ok {
+		t.Fatalf("formulário completo deveria emitir card.created: %v", *events)
+	}
 	if _, has := created.payload["source_url"]; has {
 		t.Fatalf("fonte vazia não deveria entrar no payload: %v", created.payload)
 	}
@@ -118,7 +123,8 @@ func TestCartaEscolheDeckPeloPicker(t *testing.T) {
 	steps := []tea.Msg{
 		keyRunes("f"), tea.KeyMsg{Type: tea.KeyEnter},
 		keyRunes("v"), tea.KeyMsg{Type: tea.KeyEnter},
-		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyEnter}, // fonte
+		tea.KeyMsg{Type: tea.KeyEnter}, // tags
 	}
 	for _, msg := range steps {
 		next, _ := m.Update(msg)
@@ -204,6 +210,8 @@ func TestTriagemNotaViraCartaoComFonteHerdada(t *testing.T) {
 	m = next.(Triagem)
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Triagem)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // tags vazias
+	m = next.(Triagem)
 
 	created, ok := find(*events, "card.created")
 	if !ok {
@@ -277,5 +285,114 @@ func TestTriagemDistracaoNaoOfereceCartao(t *testing.T) {
 	m = next.(Triagem)
 	if _, ok := find(*events, "card.created"); ok {
 		t.Fatalf("'c' em distração deveria ser ignorado: %v", *events)
+	}
+}
+
+// --- tags e cartão solto (catálogo v1.3) ---
+
+type versioned struct {
+	eventType string
+	v         int
+	payload   map[string]any
+}
+
+// recorderV grava também as emissões com versão explícita (EmitV).
+func recorderV() (*[]versioned, func(string, map[string]any) error, func(string, int, map[string]any) error) {
+	var events []versioned
+	return &events,
+		func(eventType string, payload map[string]any) error {
+			events = append(events, versioned{eventType, 1, payload})
+			return nil
+		},
+		func(eventType string, v int, payload map[string]any) error {
+			events = append(events, versioned{eventType, v, payload})
+			return nil
+		}
+}
+
+func feed[M tea.Model](m M, msgs ...tea.Msg) M {
+	for _, msg := range msgs {
+		next, _ := m.Update(msg)
+		m = next.(M)
+	}
+	return m
+}
+
+func TestCartaTagsNormalizadasEMantidasNaSerie(t *testing.T) {
+	events, emit, emitV := recorderV()
+	m := NewCarta(CartaConfig{
+		Decks: []DeckOption{{ID: "d1", Name: "SO"}}, DeckID: "d1", DeckName: "SO",
+		Tags:  []string{"so"},
+		GenID: func() string { return "c" }, Emit: emit, EmitV: emitV,
+	})
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	m = feed(m, keyRunes("f1"), enter, keyRunes("v1"), enter, enter, keyRunes(" Prova P2,#Redes"), enter)
+
+	if len(*events) != 1 || (*events)[0].v != 1 {
+		t.Fatalf("com deck, card.created continua v1: %v", *events)
+	}
+	got := (*events)[0].payload["tags"].([]string)
+	if strings.Join(got, " ") != "so prova p2 redes" {
+		t.Fatalf("tags deveriam vir normalizadas (espaço/vírgula separam), veio %v", got)
+	}
+	if v := m.form.inputs[3].Value(); v != "#so #prova #p2 #redes" {
+		t.Fatalf("o próximo cartão da série mantém as tags, veio %q", v)
+	}
+}
+
+func TestCartaSemDeckEmiteV2SemDeckID(t *testing.T) {
+	events, emit, emitV := recorderV()
+	m := NewCarta(CartaConfig{
+		Decks: []DeckOption{{ID: "d1", Name: "SO"}},
+		GenID: func() string { return "c" }, Emit: emit, EmitV: emitV,
+	})
+	if !strings.Contains(m.View(), "(sem deck)") {
+		t.Fatalf("o picker deveria oferecer \"(sem deck)\":\n%s", m.View())
+	}
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	m = feed(m, tea.KeyMsg{Type: tea.KeyDown}, enter) // o último item é "(sem deck)"
+	m = feed(m, keyRunes("f"), enter, keyRunes("v"), enter, enter, keyRunes("#so"), enter)
+
+	if len(*events) != 1 || (*events)[0].eventType != "card.created" || (*events)[0].v != 2 {
+		t.Fatalf("cartão solto deveria emitir card.created v2: %v", *events)
+	}
+	if _, has := (*events)[0].payload["deck_id"]; has {
+		t.Fatalf("v2 sem deck não leva deck_id: %v", (*events)[0].payload)
+	}
+}
+
+func TestCartaSemNenhumDeckVaiDiretoAoFormulario(t *testing.T) {
+	_, emit, emitV := recorderV()
+	m := NewCarta(CartaConfig{Emit: emit, EmitV: emitV})
+	if view := m.View(); !strings.Contains(view, "NOVO CARTÃO · (sem deck)") || !strings.Contains(view, "Frente") {
+		t.Fatalf("sem decks, o cartão nasce solto direto no formulário:\n%s", view)
+	}
+}
+
+func TestTriagemNotaViraCartaoSoltoComTags(t *testing.T) {
+	events, emit, emitV := recorderV()
+	m := NewTriagem(TriagemConfig{
+		Items: pendingItems(),
+		Decks: []DeckOption{{ID: "d1", Name: "IHC"}},
+		GenID: func() string { return "gen" }, Emit: emit, EmitV: emitV,
+	})
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	m = feed(m, keyRunes("c"), tea.KeyMsg{Type: tea.KeyDown}, enter) // "(sem deck)"
+	m = feed(m, enter, keyRunes("dez heurísticas"), enter, keyRunes("ihc/nielsen"), enter)
+
+	var created *versioned
+	for i := range *events {
+		if (*events)[i].eventType == "card.created" {
+			created = &(*events)[i]
+		}
+	}
+	if created == nil || created.v != 2 {
+		t.Fatalf("nota → cartão solto emite card.created v2: %v", *events)
+	}
+	if _, has := created.payload["deck_id"]; has {
+		t.Fatalf("v2 sem deck não leva deck_id: %v", created.payload)
+	}
+	if tags := created.payload["tags"].([]string); len(tags) != 1 || tags[0] != "ihc/nielsen" {
+		t.Fatalf("tags hierárquicas preservadas, veio %v", tags)
 	}
 }

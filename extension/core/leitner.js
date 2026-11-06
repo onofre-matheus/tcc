@@ -3,6 +3,7 @@
 
 import { normalize } from "./envelope.js";
 import { localDate, addDays } from "./time.js";
+import { normalizeTags } from "./tags.js";
 
 const MAX_BOX = 5;
 const INTERVAL_DAYS = { 1: 1, 2: 3, 3: 7, 4: 14, 5: 30 };
@@ -16,7 +17,7 @@ export function project(events, { now, tz }) {
       const { card_id, deck_id, front, back, source_url, source_title, tags } =
         event.payload;
       cards.set(card_id, {
-        deck_id,
+        deck_id: deck_id || null, // v2: opcional — null = cartão solto
         box: 1,
         due: localDate(event.ts, tz),
         createdTs: event.ts,
@@ -24,7 +25,7 @@ export function project(events, { now, tz }) {
         back,
         source_url: source_url ?? null,
         source_title: source_title ?? null,
-        tags: tags ?? [],
+        tags: normalizeTags(tags),
         last_explanation: null,
         explanation_count: 0,
         last_frame: "feynman", // último andaime; ausente ≡ "feynman"
@@ -37,8 +38,11 @@ export function project(events, { now, tz }) {
       const { front, back, tags } = event.payload;
       if (front !== undefined) card.front = front;
       if (back !== undefined) card.back = back;
-      if (tags !== undefined) card.tags = tags ?? [];
-    } else if (event.type === "card.archived") {
+      if (tags !== undefined) card.tags = normalizeTags(tags);
+    }
+    // card.practiced (treino fora do vencimento) é ignorado de propósito:
+    // estudar antes da hora não promove nem regride o cartão.
+    else if (event.type === "card.archived") {
       const card = cards.get(event.payload.card_id);
       if (card) card.archived = true;
     } else if (event.type === "deck.archived") {

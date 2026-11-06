@@ -55,6 +55,7 @@ func newTriagemCmd(a *app.App) *cobra.Command {
 				Items: items,
 				Decks: deckOptions(decks),
 				Emit:  emitTo(a),
+				EmitV: emitVTo(a),
 			})
 			final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
 			if err != nil {

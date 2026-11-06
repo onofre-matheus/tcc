@@ -43,11 +43,13 @@ estado projetado (**convergência**), e eventos duplicados não alteram o
 resultado (**idempotência**). Vetores com `"permutations": true` verificam isso
 embaralhando a entrada.
 
-## 3. Catálogo de eventos (v1.2)
+## 3. Catálogo de eventos (v1.3)
 
 O catálogo 1.1 acrescentou ao 1.0 os eventos de **edição e arquivamento**; o
-1.2 acrescenta **pausas e o motivo de interrupção** (novidades marcadas ▸ nas
-tabelas; `session.ended` ganhou v2 de payload). As adições são compatíveis —
+1.2, **pausas e o motivo de interrupção** (marcados ▸ nas tabelas;
+`session.ended` ganhou v2 de payload); o 1.3 acrescenta **tags livres, cartão
+sem deck e treino fora do vencimento** (marcados "(1.3)"; `card.created`
+ganhou v2 de payload). As adições são compatíveis —
 clientes antigos continuam válidos: **tipos de evento desconhecidos são
 ignorados pelas projeções**, sem interromper o processamento (vetor
 `envelope_tipo_desconhecido_ignorado`), e campos novos opcionais são
@@ -71,16 +73,29 @@ Semântica comum dos eventos novos:
 | `deck.created` | `deck_id, name, tags[]` |
 | `deck.renamed` (1.1) | `deck_id, name` |
 | `deck.archived` (1.1) | `deck_id` |
-| `card.created` | `card_id, deck_id, front, back, source_url?, source_title?, tags[]` |
+| `card.created` (v2, 1.3) | `card_id, deck_id?, front, back, source_url?, source_title?, tags[]` |
 | `card.edited` (1.1) | `card_id, front?, back?, tags[]?` |
 | `card.archived` (1.1) | `card_id` |
 | `card.reviewed` | `card_id, result: "correct"\|"wrong", session_id?` |
+| `card.practiced` (1.3) | `card_id, result: "correct"\|"wrong", session_id?` |
 | `card.explained` (v2) | `card_id, text, frame?: "feynman"\|"4causas", session_id?` |
 
 `card.edited` não altera caixa nem vencimento — corrigir o texto não é rever o
 cartão. `card.archived` tira o cartão da fila preservando caixa e histórico;
 `deck.archived` esvazia a fila do deck inteiro sem marcar os cartões
 individualmente (desarquivar o deck, evento futuro, os devolveria intactos).
+
+**Cartão sem deck (v2 de `card.created`)**: `deck_id` passa a ser opcional —
+o cartão solto é organizado só pelas tags. O cliente emite v2 **apenas quando
+não há deck**; com deck, o evento v1 segue intacto. Projeções leem v1 e v2
+(`deck_id` ausente ou `""` ≡ sem deck).
+
+**Treino (`card.practiced`)**: a resposta a um cartão **não vencido**,
+estudado no modo livre da sessão personalizada (§4.11). É registro, não
+agendamento: **nenhuma projeção de agendamento o lê** — estudar antes da hora
+não promove nem regride o cartão. Clientes antigos o ignoram por ser tipo
+desconhecido, então o estado converge entre versões. O dia de estudo já é
+contado pelo `session.ended` da sessão (§4.4 inalterado).
 
 `card.explained` registra a explicação do usuário antes de ver o verso, e a
 anterior é reapresentada para que a lacuna feche iterativamente. O `frame`
@@ -91,6 +106,36 @@ anterior é reapresentada para que a lacuna feche iterativamente. O `frame`
 novo, sem alterar o evento nem as projeções (OCP). Os andaimes operacionalizam
 *elaborative interrogation* / *self-explanation*; o `text` guarda a explicação
 já concatenada (uma linha `causa: resposta` por causa, no caso de `4causas`).
+
+### Tags livres (1.3)
+
+A **identidade da tag é o próprio nome normalizado**: não existe
+`tag.created` nem `tag_id`, então dois dispositivos que escrevem `#SO` e `so`
+convergem para a mesma tag sem regra de merge. Tags aparecem em
+`card.created`/`card.edited` (`tags[]`) e em `deck.created` (`tags[]`, as
+"transversais").
+
+**Normalização** (aplicada pelas projeções a todo `tags[]` lido, e pelos
+clientes na entrada):
+
+1. apara as pontas e remove os `#` iniciais;
+2. passa a minúsculas;
+3. divide por `/` (hierarquia, estilo Obsidian: `so/escalonamento`); em cada
+   segmento, sequências de espaço viram `-` e as pontas são aparadas;
+   segmentos vazios são descartados;
+4. tag que resulta vazia é descartada; a lista é deduplicada mantendo a
+   primeira ocorrência.
+
+Ex.: `["#SO ", "Prova P2", "/so// Threads /", "so"]` → `["so", "prova-p2",
+"so/threads"]`. O `::` continua sendo exclusivo dos decks.
+
+**Entrada livre nas superfícies**: o texto é separado por espaço ou vírgula e
+cada pedaço é normalizado (`#SO #Prova-P2, redes` → `so`, `prova-p2`,
+`redes`).
+
+**Tags efetivas** de um cartão = as dele ∪ as do próprio deck (nessa ordem,
+deduplicadas). **Hierarquia**: a tag `t` **inclui** `u` se `u == t` ou `u`
+começa com `t + "/"` (`so` inclui `so/concorrencia`, não `sobre`).
 
 ### Captura e triagem
 
@@ -177,12 +222,15 @@ data civil desse instante no fuso `tz`.
 
 - Caixas 1–5; intervalos por caixa: `[1, 3, 7, 14, 30]` dias.
 - `card.created` → caixa 1; `due` = data local da criação (**vencido
-  imediatamente**).
+  imediatamente**). Sem deck (v2), `deck_id` é `null` na saída.
+- `tags` saem normalizadas (§3, Tags livres) — as do próprio cartão; as
+  efetivas (com as do deck) são calculadas por quem precisa (§4.10, §4.11).
 - `card.reviewed`:
   - `correct` → caixa `min(caixa + 1, 5)`
   - `wrong` → caixa `max(caixa − 1, 1)` (variante atenuada: regride UMA caixa)
   - Em ambos: `due` = data local da revisão + `intervalo[nova caixa]`.
 - Revisão de cartão inexistente é ignorada.
+- `card.practiced` é ignorado (treino não altera caixa nem `due`).
 - `card.edited`: sobrescreve apenas os campos presentes (`front`, `back`,
   `tags`), last-writer-wins por campo; **não altera caixa nem `due`**.
 - `card.archived` → `archived: true`; `deck.archived` exclui da fila os
@@ -235,7 +283,7 @@ Saída: `{ days_studied, streak, reviews_today }`.
 
 ### 4.5 Decks (`projection: "decks"`)
 
-- Cada `deck.created` projeta nome e tags (transversais).
+- Cada `deck.created` projeta nome e tags (transversais, normalizadas).
 - `deck.renamed`: o último nome emitido vence (ordem total).
 - `deck.archived` → `archived: true` (nome e tags preservados).
 
@@ -315,6 +363,40 @@ importante como marca d'água ao rodar `pnn`. A regra de *quando* lembrar é a
 mesma nos dois e travada por este vetor.
 
 Saída: `{ pending: [ { appointment_id, offset_minutes, label } … ] }`.
+
+### 4.10 Tags (`projection: "tags"`)
+
+- Universo: cartões **ativos** — não arquivados e de deck não arquivado
+  (cartão sem deck nunca está em deck arquivado).
+- Uma tag aparece se estiver entre as tags efetivas de algum cartão ativo ou
+  nas tags de algum deck não arquivado (zerada, se nenhum cartão a tiver).
+- `cards` = cartões ativos com a tag **exata** entre as efetivas; `due` =
+  quantos desses estão na fila Leitner (§4.1).
+- `names` = as tags em ordem canônica (comparação por unidade de código, não
+  dependente de locale). A soma pela hierarquia (`so` reunindo `so/…`) é feita
+  só na exibição, como a dos decks — e sem contar duas vezes o cartão que tem
+  as duas tags.
+
+Saída: `{ tags: { <tag>: { cards, due } }, names: [tag…] }`.
+
+### 4.11 Sessão personalizada (`projection: "study"`)
+
+Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]` e `tags?: [tag]`.
+
+- **Deck**: o cartão casa se o seu `deck_id` estiver na **subárvore `::`** de
+  algum deck listado (o próprio ou nome que começa com `nome + "::"`). Deck
+  inexistente não casa nada; cartão sem deck nunca casa um filtro de deck.
+- **Tag**: o cartão casa se alguma tag efetiva for **incluída** por alguma
+  tag do filtro (§3: própria ou descendente `/`). As tags do filtro são
+  normalizadas (`#SO` ≡ `so`).
+- **Combinação**: OU dentro de cada lista, **E entre** as listas; lista vazia
+  (ou ausente) não restringe.
+- `queue` = a fila Leitner (§4.1) filtrada, **na mesma ordem**.
+- `practice` = cartões ativos que casam e **não** estão vencidos, ordenados por
+  `(caixa ↑, due ↑, ts de criação ↑, card_id ↑)` — o modo **treino** os
+  apresenta depois da fila, e a resposta vira `card.practiced`.
+
+Saída: `{ queue: [card_id…], practice: [card_id…] }`.
 
 ## 5. Sincronização
 
@@ -397,6 +479,7 @@ versionamento tornar recuperável até a sobrescrita.
   "now": "2026-07-10T12:00:00Z",
   "tz": "America/Sao_Paulo",
   "permutations": false,
+  "params": { "decks": [], "tags": [] },
   "events": [ … envelopes completos … ],
   "expected": { … asserção parcial sobre a saída da projeção … }
 }
@@ -407,3 +490,5 @@ versionamento tornar recuperável até a sobrescrita.
   Arrays são comparados por igualdade exata.
 - `"permutations": true` → a suíte reexecuta com a lista de eventos
   embaralhada (≥ 5 permutações determinísticas) e exige o mesmo resultado.
+- `params` (opcional) carrega parâmetros específicos da projeção além de
+  `now`/`tz` — hoje, o filtro da sessão personalizada (§4.11).

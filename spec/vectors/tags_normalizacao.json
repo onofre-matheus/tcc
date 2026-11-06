@@ -1,0 +1,26 @@
+{
+  "name": "tags normalizadas: # inicial, maiúsculas, espaços, hierarquia por / e duplicatas",
+  "projection": "tags",
+  "now": "2026-07-10T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": false,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 2, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "f1", "back": "b1",
+        "tags": ["#Escalonamento ", "so", "Prova P2", "prova-p2", "/SO// Threads /", "##", "# Memória"] } },
+    { "id": "evt-02", "type": "card.created", "v": 2, "lc": 2, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "f2", "back": "b2", "tags": ["rascunho"] } },
+    { "id": "evt-03", "type": "card.edited", "v": 1, "lc": 3, "ts": "2026-07-02T11:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "tags": ["SO", "#so"] } }
+  ],
+  "expected": {
+    "tags": {
+      "escalonamento": { "cards": 1, "due": 1 },
+      "so": { "cards": 2, "due": 2 },
+      "prova-p2": { "cards": 1, "due": 1 },
+      "so/threads": { "cards": 1, "due": 1 },
+      "memória": { "cards": 1, "due": 1 }
+    },
+    "names": ["escalonamento", "memória", "prova-p2", "so", "so/threads"]
+  }
+}

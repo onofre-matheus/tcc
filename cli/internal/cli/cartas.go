@@ -1,6 +1,8 @@
-// `pnn cartas [deck]` — a tela de manutenção do acervo: lista os cartões com
-// números efêmeros para `pnn editar N --frente/--verso` e `pnn arquivar N`.
-// Com deck, restringe à subárvore `Pai::Filho` (mesma regra do revisar).
+// `pnn cartas [deck] [--tag x]…` — a tela de manutenção do acervo: lista os
+// cartões com números efêmeros para `pnn editar N --frente/--verso/--tag` e
+// `pnn arquivar N`. Deck e tags filtram com a mesma regra da sessão
+// personalizada (spec §4.11: subárvore `::`, tag inclui as descendentes `/`),
+// mas valem também para os não vencidos. Cartões soltos vão em "(sem deck)".
 package cli
 
 import (
@@ -17,6 +19,7 @@ import (
 
 func newCartasCmd(a *app.App) *cobra.Command {
 	var asJSON, arquivados bool
+	var tags []string
 	cmd := &cobra.Command{
 		Use:   "cartas [deck]",
 		Short: "lista os cartões para editar ou arquivar",
@@ -35,12 +38,11 @@ func newCartasCmd(a *app.App) *cobra.Command {
 				return err
 			}
 
-			var allowed map[string]bool
-			if len(args) == 1 {
-				if allowed = deckSubtree(decks, args[0]); len(allowed) == 0 {
-					return fmt.Errorf("deck %q não encontrado — veja `pnn decks`", args[0])
-				}
+			filter, err := studyFilter(decks, args, tags)
+			if err != nil {
+				return err
 			}
+			match := core.StudyMatcher(decks, filter)
 
 			if asJSON {
 				raw, err := json.MarshalIndent(map[string]any{"decks": decks.Decks, "leitner": leitner}, "", "  ")
@@ -58,16 +60,20 @@ func newCartasCmd(a *app.App) *cobra.Command {
 			}
 			var rows []row
 			for id, card := range leitner.Cards {
-				if allowed != nil && !allowed[card.DeckID] {
+				if !match(card) {
 					continue
 				}
-				if (card.Archived || decks.Decks[card.DeckID].Archived) && !arquivados {
+				if (card.Archived || decks.Decks[card.Deck()].Archived) && !arquivados {
 					continue
 				}
-				rows = append(rows, row{id: id, card: card, deck: decks.Decks[card.DeckID].Name})
+				card.Tags = core.EffectiveTags(card, decks)
+				rows = append(rows, row{id: id, card: card, deck: decks.Decks[card.Deck()].Name})
 			}
 			slices.SortFunc(rows, func(x, y row) int {
 				if x.deck != y.deck {
+					if x.deck == "" || y.deck == "" { // soltos por último
+						return strings.Compare(y.deck, x.deck)
+					}
 					return strings.Compare(x.deck, y.deck)
 				}
 				if x.card.Due != y.card.Due {
@@ -86,16 +92,23 @@ func newCartasCmd(a *app.App) *cobra.Command {
 			lastDeck := ""
 			for i, r := range rows {
 				refs[i] = app.ViewRef{Kind: "card", ID: r.id}
-				if r.deck != lastDeck {
-					if lastDeck != "" {
+				if i == 0 || r.deck != lastDeck {
+					if i > 0 {
 						fmt.Fprintln(a.Out)
 					}
-					fmt.Fprintf(a.Out, " %s\n", th.Bold(r.deck))
+					title := r.deck
+					if title == "" {
+						title = "(sem deck)"
+					}
+					fmt.Fprintf(a.Out, " %s\n", th.Bold(title))
 					lastDeck = r.deck
 				}
 				status := fmt.Sprintf("caixa %d · vence %s", r.card.Box, r.card.Due)
-				if r.card.Archived || decks.Decks[r.card.DeckID].Archived {
+				if r.card.Archived || decks.Decks[r.card.Deck()].Archived {
 					status = "arquivado"
+				}
+				if len(r.card.Tags) > 0 {
+					status = "#" + strings.Join(r.card.Tags, " #") + " · " + status
 				}
 				fmt.Fprintf(a.Out, " %d  %s  %s\n", i+1, r.card.Front, th.Dim(status))
 			}
@@ -104,5 +117,6 @@ func newCartasCmd(a *app.App) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emite as projeções em JSON")
 	cmd.Flags().BoolVar(&arquivados, "arquivados", false, "inclui cartões e decks arquivados")
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filtra por tag, incluindo as descendentes (repetível: casa qualquer uma)")
 	return cmd
 }

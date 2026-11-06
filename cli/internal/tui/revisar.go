@@ -22,6 +22,10 @@ type Card struct {
 	LastExplanation *string
 	LastFrame       string // andaime da explicação anterior (default "feynman")
 	Box             int
+	Tags            []string // tags efetivas, só para exibição
+	// Practice marca o cartão de treino (não vencido, modo --treino): a
+	// resposta vira card.practiced, que não mexe na caixa (spec §4.11).
+	Practice bool
 }
 
 // Andaimes de explicação (spec/SPEC.md §4.1). O Feynman é o padrão; as 4 causas
@@ -73,6 +77,7 @@ type Revisar struct {
 	causeIdx       int       // passo corrente do wizard das 4 causas (0..3)
 	causes         [4]string // respostas coletadas por causa
 	Correct, Wrong int
+	Practiced      int // quantas respostas foram de treino (card.practiced)
 	Err            error
 }
 
@@ -254,7 +259,12 @@ func (m Revisar) updateRevealed(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Revisar) review(result string) (tea.Model, tea.Cmd) {
-	if err := m.cfg.Emit("card.reviewed", map[string]any{
+	eventType := "card.reviewed"
+	if m.card().Practice {
+		eventType = "card.practiced"
+		m.Practiced++
+	}
+	if err := m.cfg.Emit(eventType, map[string]any{
 		"card_id":    m.card().ID,
 		"result":     result,
 		"session_id": m.cfg.SessionID,
@@ -362,6 +372,9 @@ func (m Revisar) View() string {
 	if m.phase == reviewPause {
 		done := m.Correct + m.Wrong
 		summary := []string{fmt.Sprintf("%d cartão(ões) revisado(s) · %d acerto(s) · %d erro(s)", done, m.Correct, m.Wrong)}
+		if m.Practiced > 0 {
+			summary = append(summary, fmt.Sprintf("%d de treino (a caixa não mudou)", m.Practiced))
+		}
 		return pauseView("revisão concluída · 🐘 mandou bem!", m.timer, summary, "[q] sair", m.width)
 	}
 	if m.phase == reasonPhase {
@@ -375,9 +388,23 @@ func (m Revisar) View() string {
 
 	card := m.card()
 	var b strings.Builder
-	header := fmt.Sprintf("● REVISÃO · cartão %d de %d · caixa %d", m.idx+1, len(m.cfg.Cards), card.Box)
+	mode := "REVISÃO"
+	if card.Practice {
+		mode = "TREINO"
+	}
+	header := fmt.Sprintf("● %s · cartão %d de %d · caixa %d", mode, m.idx+1, len(m.cfg.Cards), card.Box)
 	b.WriteString(redTitle.Render(header))
 	b.WriteString("   " + redTimer.Render("▐█  "+m.timer.clock()+"  █▌"))
+	var meta []string
+	if card.Practice {
+		meta = append(meta, "treino · não altera a caixa")
+	}
+	if tags := tagsLine(card.Tags); tags != "" {
+		meta = append(meta, tags)
+	}
+	if len(meta) > 0 {
+		b.WriteString("\n " + dim.Render(strings.Join(meta, " · ")))
+	}
 	b.WriteString("\n\n " + card.Front + "\n\n")
 
 	if m.phase == askPhase {

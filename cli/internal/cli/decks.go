@@ -45,14 +45,31 @@ func newDecksCmd(a *app.App) *cobra.Command {
 			}
 
 			th := ui.Theme{On: a.Color}
-			if len(decks.Decks) == 0 {
-				fmt.Fprintf(a.Out, "%s\n", th.Dim("nenhum deck — crie com `pnn deck \"Nome\"`"))
-				return nil
-			}
-
 			dueByDeck := map[string]int{}
 			for _, cardID := range leitner.Queue {
-				dueByDeck[leitner.Cards[cardID].DeckID]++
+				dueByDeck[leitner.Cards[cardID].Deck()]++
+			}
+			loose := 0 // cartões soltos ativos (card.created v2 sem deck)
+			for _, card := range leitner.Cards {
+				if card.DeckID == nil && !card.Archived {
+					loose++
+				}
+			}
+			looseLine := func() {
+				if loose == 0 {
+					return
+				}
+				line := "   " + th.Dim("(sem deck) "+plural(loose, "cartão", "cartões"))
+				if due := dueByDeck[""]; due > 0 {
+					line += "  " + th.Red(plural(due, "vencido", "vencidos"))
+				}
+				fmt.Fprintln(a.Out, line)
+			}
+
+			if len(decks.Decks) == 0 {
+				fmt.Fprintf(a.Out, "%s\n", th.Dim("nenhum deck — crie com `pnn deck \"Nome\"`"))
+				looseLine()
+				return nil
 			}
 
 			ids := make([]string, 0, len(decks.Decks))
@@ -85,6 +102,7 @@ func newDecksCmd(a *app.App) *cobra.Command {
 			if len(refs) == 0 {
 				fmt.Fprintf(a.Out, "%s\n", th.Dim("todos os decks estão arquivados — veja com `pnn decks --arquivados`"))
 			}
+			looseLine()
 			return a.SaveView(refs)
 		},
 	}

@@ -17,7 +17,12 @@ import { project as stats } from "../core/stats.js";
 import { project as inbox } from "../core/inbox.js";
 import { project as calendar } from "../core/calendar.js";
 import { project as review } from "../core/review.js";
+import { project as tags, normalizeTags } from "../core/tags.js";
+import { project as study } from "../core/study.js";
 import { attentionWindowSeconds } from "../core/attention.js";
+
+// Entrada livre de tags e tags efetivas (cartão ∪ deck), para a UI.
+export { parseTags, effectiveTags } from "../core/tags.js";
 
 // Deslocamento de tempo para DEBUG: viaja no tempo para testar vencimentos do
 // Leitner e streaks sem esperar dias reais. Afeta o `now` das projeções e o
@@ -64,6 +69,10 @@ export const state = {
   tasks: () => log.project(tasks),
   leitner: () => log.project(leitner, dayParams()),
   decks: () => log.project(decks),
+  tags: () => log.project(tags, dayParams()),
+  // Sessão personalizada (spec §4.11): { decks: [deck_id], tags: [tag] } →
+  // { queue: vencidos que casam, practice: não vencidos que casam }.
+  study: (filter = {}) => log.project(study, { ...dayParams(), ...filter }),
   stats: () => log.project(stats, dayParams()),
   inbox: () => log.project(inbox),
   // A retrospectiva navega no histórico variando só o instante de referência:
@@ -127,14 +136,23 @@ export const editCard = (card_id, fields) =>
 export const archiveCard = (card_id) =>
   log.append("card.archived", { card_id });
 
-export async function createCard(deck_id, front, back, extra = {}) {
+// deck_id null/"" = cartão solto, organizado só pelas tags: card.created v2
+// sem o campo deck_id (catálogo 1.3). Com deck, o evento v1 fica intacto.
+export async function createCard(deck_id, front, back, { tags = [], ...extra } = {}) {
   const card_id = id("c");
-  await log.append("card.created", { card_id, deck_id, front, back, tags: [], ...extra });
+  const fields = { front, back, tags: normalizeTags(tags), ...extra };
+  if (deck_id) await log.append("card.created", { card_id, deck_id, ...fields });
+  else await log.append("card.created", { card_id, ...fields }, { v: 2 });
   return card_id;
 }
 
 export const reviewCard = (card_id, result, session_id) =>
   log.append("card.reviewed", { card_id, result, ...(session_id ? { session_id } : {}) });
+
+// Treino fora do vencimento (modo livre da sessão personalizada): grava a
+// resposta sem mexer na caixa — nenhuma projeção de agendamento lê o evento.
+export const practiceCard = (card_id, result, session_id) =>
+  log.append("card.practiced", { card_id, result, ...(session_id ? { session_id } : {}) });
 
 // Andaime opcional (catálogo v2): frame != "feynman" grava o método usado e
 // sobe a versão do payload. Feynman é o padrão e mantém o evento v1 inalterado.

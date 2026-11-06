@@ -1,0 +1,23 @@
+{
+  "name": "card.practiced (treino fora do vencimento) não altera caixa nem vencimento",
+  "projection": "leitner",
+  "now": "2026-07-07T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f", "back": "b", "tags": [] } },
+    { "id": "evt-02", "type": "card.reviewed", "v": 1, "lc": 2, "ts": "2026-07-05T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct", "session_id": "s1" } },
+    { "id": "evt-03", "type": "card.practiced", "v": 1, "lc": 3, "ts": "2026-07-06T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "wrong", "session_id": "s2" } },
+    { "id": "evt-04", "type": "card.practiced", "v": 1, "lc": 4, "ts": "2026-07-06T12:05:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct", "session_id": "s2" } }
+  ],
+  "expected": {
+    "cards": {
+      "c1": { "box": 2, "due": "2026-07-08" }
+    },
+    "queue": []
+  }
+}
