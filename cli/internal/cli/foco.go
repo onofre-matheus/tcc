@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// notifyGrace é o quanto a saída espera pelo último aviso de desktop — o fim
-// da pausa acontece no mesmo instante em que o programa fecha.
+// notifyGrace é o quanto a saída espera pelo último aviso de desktop ainda em
+// voo — quem sai logo depois de um alarme não pode cortá-lo.
 const notifyGrace = 3 * time.Second
 
 func newFocoCmd(a *app.App) *cobra.Command {

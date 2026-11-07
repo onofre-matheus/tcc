@@ -208,6 +208,97 @@ func TestFocoEnterNaPausaComecaNovoFoco(t *testing.T) {
 	}
 }
 
+// focoNoFimDaPausa leva o foco até a pausa tocar sozinha (bloco concluído →
+// pausa verde → pausa cumprida).
+func focoNoFimDaPausa(t *testing.T, events *[]recorded, emit func(string, map[string]any) error) (Foco, tea.Cmd) {
+	t.Helper()
+	m := newTestFoco(events, emit)
+	m.timer.remaining = 1
+	next, _ := m.Update(tickMsg{}) // toca o bloco
+	m = next.(Foco)
+	m.timer.remaining = 1
+	next, cmd := m.Update(tickMsg{}) // toca a pausa
+	return next.(Foco), cmd
+}
+
+func TestFocoFimDaPausaNaoFechaEOfereceVoltarATarefa(t *testing.T) {
+	events, emit := recorder()
+	m, cmd := focoNoFimDaPausa(t, events, emit)
+
+	if isQuit(t, cmd) {
+		t.Fatal("pausa cumprida não fecha a tela: quem descansou volta com um Enter")
+	}
+	last := (*events)[len(*events)-1]
+	if last.eventType != "pause.ended" {
+		t.Fatalf("a pausa cumprida é gravada quando toca, veio %v", *events)
+	}
+	view := m.View()
+	if !strings.Contains(view, `voltar a "Escrever seção 4.6"`) || !strings.Contains(view, "[q] sair") {
+		t.Fatalf("o fim da pausa deveria oferecer voltar à tarefa ou sair:\n%s", view)
+	}
+}
+
+func TestFocoFimDaPausaEnterVoltaAMesmaTarefa(t *testing.T) {
+	events, emit := recorder()
+	m, _ := focoNoFimDaPausa(t, events, emit)
+	before := len(*events)
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Foco)
+
+	added := (*events)[before:]
+	if len(added) != 1 || added[0].eventType != "session.started" {
+		t.Fatalf("Enter abre só a sessão nova (a pausa já estava fechada), veio %v", added)
+	}
+	if added[0].payload["session_id"] != "s2" || added[0].payload["target_id"] != "t1" {
+		t.Fatalf("o novo bloco é na mesma tarefa, veio %v", added[0].payload)
+	}
+	if cmd == nil || isQuit(t, cmd) {
+		t.Fatal("o relógio parado no fim da pausa precisa voltar a correr")
+	}
+	if !strings.Contains(m.View(), "25:00") {
+		t.Fatalf("novo foco recomeça o timer:\n%s", m.View())
+	}
+}
+
+func TestFocoFimDaPausaQSaiSemGravar(t *testing.T) {
+	events, emit := recorder()
+	m, _ := focoNoFimDaPausa(t, events, emit)
+	before := len(*events)
+
+	_, cmd := m.Update(keyRunes("q"))
+
+	if !isQuit(t, cmd) {
+		t.Fatal("q no fim da pausa sai do programa")
+	}
+	if len(*events) != before {
+		t.Fatalf("sair no fim da pausa não grava nada, veio %v", (*events)[before:])
+	}
+}
+
+func TestFocoFimDaPausaTickParadoNaoGrava(t *testing.T) {
+	events, emit := recorder()
+	m, _ := focoNoFimDaPausa(t, events, emit)
+	before := len(*events)
+
+	_, cmd := m.Update(tickMsg{})
+
+	if cmd != nil || len(*events) != before {
+		t.Fatalf("esperando a escolha, um tick não faz nada, veio %v", (*events)[before:])
+	}
+}
+
+func TestFocoFimDaPausaTVaiATriagem(t *testing.T) {
+	events, emit := recorder()
+	m, _ := focoNoFimDaPausa(t, events, emit)
+
+	next, cmd := m.Update(keyRunes("t"))
+
+	if !isQuit(t, cmd) || !next.(Foco).WantTriage {
+		t.Fatal("t no fim da pausa sai pedindo a triagem")
+	}
+}
+
 func TestFocoCheckinPerguntaEGravaResposta(t *testing.T) {
 	events, emit := recorder()
 	var versions []int

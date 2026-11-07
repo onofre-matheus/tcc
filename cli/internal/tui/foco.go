@@ -1,7 +1,9 @@
 // `pnn foco` — sessão de foco (spec/CLI.md §2/§4): tela VERMELHA com timer
 // grande e a linha de distração sempre focada (adiamento de distrações, RF06);
 // concluir leva à pausa VERDE, interromper (Esc) pula a pausa — o descanso
-// cronometrado é recompensa de completar o bloco.
+// cronometrado é recompensa de completar o bloco. Quando a pausa toca, a tela
+// não fecha: um Enter devolve à mesma tarefa, para que cumprir a pausa não
+// custe mais do que pulá-la.
 package tui
 
 import (
@@ -39,6 +41,9 @@ const (
 	focoReason  // Esc: uma linha opcional de motivo antes de encerrar
 	focoCheckin // check-in de atenção: "na tarefa? [s/n]"
 	focoBreak   // Ctrl+P: escolher a duração da pausa (encerra a sessão)
+	// focoPauseDone: a pausa tocou e já está gravada; a tela espera a escolha
+	// — Enter volta à tarefa, q sai. O relógio fica parado até lá.
+	focoPauseDone
 )
 
 // Durações de pausa oferecidas no break ([1]..[5]).
@@ -130,6 +135,9 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.phase == focoReason {
 			return m, tick() // o relógio não apressa a resposta
 		}
+		if m.phase == focoPauseDone {
+			return m, nil // nada corre enquanto a escolha não vem
+		}
 		if m.phase != focoPaused {
 			m.elapsedSec++
 		}
@@ -145,11 +153,17 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tick()
 		}
 		if m.phase == focoPaused {
+			// A pausa cumprida é gravada no instante em que toca (duração
+			// cheia). A tela não fecha: antes, quem cumpria a pausa tinha de
+			// redigitar `pnn foco N`, e quem pulava com Enter seguia na tarefa —
+			// o incentivo era pular a pausa.
 			if err := m.endPause(); err != nil {
 				m.Err = err
+				return m, tea.Quit
 			}
 			notifyAlarm("Fim da pausa", "descanso encerrado — de volta ao foco")
-			return m, tea.Quit // fim da pausa → volta ao azul
+			m.phase = focoPauseDone
+			return m, nil // o encadeamento de ticks para; Enter o religa
 		}
 		if err := m.emitEnded("completed", ""); err != nil {
 			m.Err = err
@@ -178,6 +192,8 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCheckin(msg)
 		case focoBreak:
 			return m.updateBreak(msg)
+		case focoPauseDone:
+			return m.updatePauseDone(msg)
 		}
 		return m.updateRunning(msg)
 	}
@@ -235,22 +251,11 @@ func (m Foco) updateRunning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Foco) updatePaused(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case msg.Type == tea.KeyEnter: // novo foco
-		if err := m.endPause(); err != nil {
+	case msg.Type == tea.KeyEnter: // novo foco, mesma tarefa
+		if err := m.nextBlock(); err != nil {
 			m.Err = err
 			return m, tea.Quit
 		}
-		m.sessionID = m.cfg.NewSessionID()
-		if err := m.emitStarted(); err != nil {
-			m.Err = err
-			return m, tea.Quit
-		}
-		m.phase = focoRunning
-		m.timer = newCountdown(m.cfg.Minutes)
-		m.elapsedSec = 0
-		m.Distractions = 0
-		m.Checkins, m.CheckinsOn = 0, 0
-		m.input.Reset()
 		return m, nil // o encadeamento de ticks segue vivo
 
 	case msg.String() == "t":
@@ -267,6 +272,65 @@ func (m Foco) updatePaused(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+// updatePauseDone: a pausa já tocou e está gravada. Enter abre o próximo
+// bloco na mesma tarefa; [t] vai à triagem; q/Esc/Ctrl+C saem sem gravar nada.
+func (m Foco) updatePauseDone(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Type == tea.KeyEnter:
+		if err := m.nextBlock(); err != nil {
+			m.Err = err
+			return m, tea.Quit
+		}
+		return m, tick() // o relógio parou no fim da pausa; religa
+	case msg.String() == "t":
+		m.WantTriage = true
+		return m, tea.Quit
+	case msg.String() == "q", msg.Type == tea.KeyEsc, msg.Type == tea.KeyCtrlC:
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// nextBlock fecha a pausa, se ainda aberta, e abre um bloco novo na mesma
+// tarefa (session.started com o mesmo target_id).
+func (m *Foco) nextBlock() error {
+	if err := m.endPause(); err != nil {
+		return err
+	}
+	m.sessionID = m.cfg.NewSessionID()
+	if err := m.emitStarted(); err != nil {
+		return err
+	}
+	m.phase = focoRunning
+	m.timer = newCountdown(m.cfg.Minutes)
+	m.elapsedSec = 0
+	m.Distractions = 0
+	m.Checkins, m.CheckinsOn = 0, 0
+	m.input.Reset()
+	return nil
+}
+
+// enterAction descreve o que o Enter faz na pausa: diz a tarefa e a duração
+// do próximo bloco, para não restar dúvida de que ele volta ao mesmo ponto.
+func (m Foco) enterAction() string {
+	if m.cfg.TaskTitle == "" {
+		return fmt.Sprintf("[Enter] novo foco (%d min)", m.cfg.Minutes)
+	}
+	return fmt.Sprintf("[Enter] voltar a \"%s\" (%d min)", m.cfg.TaskTitle, m.cfg.Minutes)
+}
+
+// sessionSummary é o que a sessão rendeu, repetido na pausa e no fim dela.
+func (m Foco) sessionSummary() []string {
+	var summary []string
+	if m.Distractions > 0 {
+		summary = append(summary, fmt.Sprintf("Nesta sessão: %d distração(ões) anotada(s) → triar depois", m.Distractions))
+	}
+	if m.Checkins > 0 {
+		summary = append(summary, fmt.Sprintf("Check-ins: na tarefa em %d de %d", m.CheckinsOn, m.Checkins))
+	}
+	return summary
 }
 
 // updateCheckin responde o check-in de atenção: [s]im / [n]ão → checkin.logged;
@@ -396,18 +460,24 @@ func (m Foco) View() string {
 		return ""
 	}
 	if m.phase == focoPaused {
-		var summary []string
-		if m.Distractions > 0 {
-			summary = append(summary, fmt.Sprintf("Nesta sessão: %d distração(ões) anotada(s) → triar depois", m.Distractions))
-		}
-		if m.Checkins > 0 {
-			summary = append(summary, fmt.Sprintf("Check-ins: na tarefa em %d de %d", m.CheckinsOn, m.Checkins))
-		}
 		head := m.pauseHead
 		if head == "" {
 			head = fmt.Sprintf("%d min de foco · 🐘 mandou bem!", m.cfg.Minutes)
 		}
-		return pauseView(head, m.timer, summary, "[Enter] novo foco · [t] triagem · [q] sair", m.width)
+		return pauseView(head, m.timer, m.sessionSummary(), m.enterAction()+" · [t] triagem · [q] sair", m.width)
+	}
+	if m.phase == focoPauseDone {
+		var b strings.Builder
+		b.WriteString(blueTitle.Render("⏰ fim da pausa · 🐘 bora de novo?"))
+		b.WriteString("\n\n")
+		for _, line := range m.sessionSummary() {
+			b.WriteString(" " + line + "\n")
+		}
+		if len(m.sessionSummary()) > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(" " + blueText.Render(m.enterAction()) + dim.Render(" · [t] triagem · [q] sair") + "\n")
+		return b.String()
 	}
 	if m.phase == focoReason {
 		var b strings.Builder
