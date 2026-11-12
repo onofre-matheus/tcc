@@ -122,8 +122,8 @@ Projeções e o que entregam:
 | `leitner` | card.* (exceto card.practiced), deck.archived, tag.renamed | cartões, caixa 1–5 e fila de vencidos |
 | `decks` | deck.*, tag.renamed | decks com nome, tags e flag de arquivado |
 | `tags` | card.*, deck.*, tag.renamed | tags (normalizadas, hierarquia `/`) com cartões e vencidos |
-| `study` | card.*, deck.*, link.* + filtro `{decks, tags, around}` | sessão personalizada: fila filtrada (inclusive pela vizinhança de conexões) + não vencidos para treino |
-| `links` | link.*, tag.renamed, card.created, deck.created | conexões explícitas, vizinhança não direcionada e nós conectados |
+| `study` | card.*, deck.*, link.*, page.* + filtro `{decks, tags, around}` | sessão personalizada: fila filtrada (inclusive pela vizinhança de sinapses; ao redor de página, também as tags dela) + não vencidos para treino |
+| `links` | link.*, tag.renamed, card.created, deck.created, page.created | sinapses (conexões explícitas), vizinhança não direcionada e nós ligados |
 | `studies` | study.*, tag.renamed | sessões salvas (o filtro com um nome) |
 | `graph` | card.*, deck.*, link.*, tag.renamed | o acervo como grafo: nós (cartões ativos, decks, tags) e arestas (link, tag, deck, parent) |
 | `calendar` | appointment.* | compromissos e próximos (`upcoming`) |
@@ -180,7 +180,7 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 
 | Comando | Evento(s) | Notas |
 |---|---|---|
-| `pnn` ou `pnn dia` | — | a tela "e agora?": agenda + lista A/B/C + vencidos |
+| `pnn` ou `pnn dia` | — | a tela "e agora?": agenda + lista A/B/C (com `⚡N` nas tarefas ligadas a páginas) + vencidos |
 | `pnn t "título" [-p A\|B\|C] [--data AAAA-MM-DD] [--sub N]` | `task.created` (+`task.prioritized`) | `--sub N` = subtarefa do item N |
 | `pnn feito N` | `task.completed` | |
 | `pnn pri N A\|B\|C` | `task.prioritized` | última prioridade vence |
@@ -195,6 +195,22 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 | `pnn caixa` | — | lista pendências de triagem |
 | `pnn triagem` | `note.triaged`/`distraction.triaged` (+`card.created`/`task.created`) | TUI, um item por vez |
 
+### Páginas (catálogo 1.6)
+
+Anotações longas e de uso constante. O `$EDITOR` abre **só o corpo**; título,
+tags e sinapses são metadado e mudam por comando (`pnn editar N "título"`,
+`--tag`, `pnn ligar`), como nos cartões — a página os mostra como referência
+numerada. Detalhes em [`spec/CLI.md`](../spec/CLI.md) §3, "Páginas".
+
+| Comando | Evento(s) | Notas |
+|---|---|---|
+| `pnn p "título" [--tag T]…` | `page.created` | abre o editor no corpo (markdown puro) |
+| `pnn paginas [--tag T]… [--todas] [--por-tag] [--arquivadas] [--json]` | — | as fixadas e as 15 editadas por último (rodapé com o resto); `--por-tag` agrupa na árvore de tags (5 por tag); `--arquivadas` só as arquivadas; numerada, com `⚡N` |
+| `pnn pagina N\|título [-e] [--cru]` | — (`-e`: `page.edited`) | lê formatada (glamour) e paginada, com as sinapses numeradas (a página é o 1); acha pelo título sem caixa nem acento |
+| `pnn buscar "texto"` | — | páginas (título, tags, texto) e cartões, com o trecho que casa |
+| `pnn fixar N` | `page.edited` (`pinned`) | alterna fixar/desafixar |
+| `pnn escrever N\|título` | `page.edited` (+ os eventos dos comandos `/`) | o editor do pnn fora do foco: `/tarefa`, `/tarefas`, `/feito`, `/cartao`, `/tag`, `/ligar`; `Ctrl+Z`/`Ctrl+Y` desfaz/refaz; `Esc` grava e sai |
+
 ### Estudo
 
 | Comando | Evento(s) | Notas |
@@ -203,10 +219,10 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 | `pnn deck "Pai::Filho" [--tag t]` | `deck.created` | hierarquia por convenção de nome |
 | `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (v2 sem deck) | TUI em série: frente → verso → fonte → tags; "(sem deck)" cria cartão solto |
 | `pnn cartas [deck] [--tag T]… [--arquivados]` | — | manutenção do acervo, numerada, com as tags |
-| `pnn tags [--json]` | — | tags em árvore `/`, numerada, com cartões, vencidos e conexões |
-| `pnn ligar A B [C…] [--relacao R]` | `link.created` | conexão estilo Obsidian; nó = N da última tela, `'#tag'` ou nome de deck |
-| `pnn desligar A B [C…]` | `link.removed` | remove todas as conexões do par |
-| `pnn conexoes [nó] [--json]` | — | sem nó, os nós conectados; com nó, a vizinhança numerada (o nó é o 1) |
+| `pnn tags [--json]` | — | tags em árvore `/`, numerada, com cartões, páginas, vencidos e sinapses |
+| `pnn ligar A B [C…] [--relacao R]` | `link.created` (sinapse) ou `card.edited`/`page.edited` (com `'#tag'`: classifica) | sinapse entre coisas (cartão, página, tarefa, deck); nó = N da última tela, `'#tag'`, nome de deck ou título de página. Tag não é ponta de sinapse; tarefa não tem tags |
+| `pnn desligar A B [C…]` | `link.removed` (ou tira a tag) | desfaz todas as sinapses do par; com `'#tag'`, tira a tag do item |
+| `pnn sinapses [nó] [--json]` | — | alias `conexoes`; sem nó, o que tem sinapses; com nó, a vizinhança numerada (o nó é o 1) |
 | `pnn grafo [nó] [--raio R] [--sem-cartoes] [--json]` | — | o acervo em DOT: `pnn grafo \| dot -Tsvg > grafo.svg`; com nó, o grafo local |
 | `pnn sessao "Nome" [deck] [--tag T]… [--ao-redor N]… [--treino]` | `study.saved` | salva o filtro de revisão com um nome (o mesmo nome atualiza) |
 | `pnn sessoes [--json]` | — | sessões salvas, numeradas, com vencidos e treino de hoje |
@@ -216,23 +232,23 @@ Todo comando de leitura aceita `--json` (scriptável e testável).
 
 | Comando | Evento(s) | Notas |
 |---|---|---|
-| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN]` | `session.started/ended` (+`distraction.captured`, `checkin.logged`, `pause.*`) | `-m` padrão = janela de atenção; Esc pergunta o motivo (opcional); `--checkin N` pergunta "na tarefa? [s/n]" a cada N min (sino); `Ctrl+P` = break de 5/10/15/20/25 min que encerra a sessão (`reason: "pausa"`) |
+| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN] [--relogio]` | `session.started/ended` (+`distraction.captured`, `checkin.logged`, `pause.*`) | `-m` padrão = janela de atenção; Esc pergunta o motivo (opcional); `--checkin N` pergunta "na tarefa? [s/n]" a cada N min (sino); `Ctrl+P` = break de 5/10/15/20/25 min que encerra a sessão (`reason: "pausa"`); com a tarefa ligada a página (⚡), abre no **modo de escrita**: a página num editor na própria tela, relógio na barra, `/` abre comandos (`/pagina`, `/tarefa`, `/tarefas`, `/feito`, `/cartao`, `/tag`, `/ligar`, `/distracao`), `Ctrl+S` grava, `Ctrl+Z` desfaz; sem página, o `/` da linha de distração abre os mesmos comandos para a tarefa (`/pagina` cria e começa a escrever; `/tarefa` cria subtarefa) e `Ctrl+O` já sugere `/pagina`; `--relogio` abre no relógio grande (`Ctrl+O` escreve); `Ctrl+E` leva a página ao `$EDITOR` |
 | `pnn pausa [MIN]` | `pause.started` | pausa avulsa com duração definida (Safren) |
 | `pnn volta` | `pause.ended` | encerra a pausa aberta |
 | `pnn pausa --das HH:MM --ate HH:MM` | `pause.logged` | retroativa: tempo do domínio no payload |
 | `pnn semana [N] [--de D]` | — | retrospectiva de qualquer semana (projeção `review`) |
-| `pnn sync` | — | **não implementado** (ver §7) |
+| `pnn sync` | — | troca eventos com o bucket S3 (sobe o seu objeto em `.jsonl.zst`, baixa os dos outros); ver §7 |
 
 ### Edição e arquivamento (catálogo v1.1)
 
 Três verbos genéricos operam sobre o item **N da última tela**; o `kind` salvo
 decide o evento ([`internal/cli/editar.go`](internal/cli/editar.go)):
 
-| Comando | task | deck | card | appointment | tag | study |
-|---|---|---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` |
-| `pnn apagar N` | `task.deleted` | ✗ arquive | ✗ arquive | `appointment.cancelled` | ✗ | `study.deleted` |
-| `pnn arquivar N` | ✗ feito/apagar | `deck.archived` | `card.archived` | ✗ apagar | ✗ | ✗ |
+| Comando | task | deck | card | appointment | tag | study | page |
+|---|---|---|---|---|---|---|---|
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` | `page.edited` |
+| `pnn apagar N` | `task.deleted` | ✗ arquive | ✗ arquive | `appointment.cancelled` | ✗ | `study.deleted` | ✗ arquive |
+| `pnn arquivar N` | ✗ feito/apagar | `deck.archived` | `card.archived` | ✗ apagar | ✗ | ✗ | `page.archived` |
 
 Distinção deliberada: **apagar é tombstone** (tarefa e compromisso descartados
 não têm valor histórico — somem do estado); **arquivar preserva** (o histórico
@@ -277,15 +293,24 @@ estudo novo entra como um valor novo, sem tocar na projeção Leitner (OCP).
 
 ---
 
-## 7. Sincronização — o que existe e o que falta
+## 7. Sincronização
 
-O lado cliente está pronto e testado: `Store.Merge` (fusão idempotente por
-`id`), `Outbox` e `Cursor` já existem em [`store/store.go`](store/store.go). O
-que **não** existe ainda é o transporte: `pnn sync` não está registrado como
-comando. No estado atual, a réplica da CLI (`~/.pnn`) e a da extensão evoluem
-de forma independente. Isso é intencional e documentado como limitação/trabalho
-futuro na monografia — nenhuma outra propriedade *local-first* é afetada: cada
-cliente é plenamente funcional offline.
+`pnn sync` troca eventos com um bucket S3 ([`internal/sync/`](internal/sync/),
+SPEC §5): baixa os objetos dos outros dispositivos que mudaram, funde no log
+local (dedup por `id` + ordem total) e sobe o próprio. Cada dispositivo grava
+só a sua chave, `<prefixo>/<device>.jsonl.zst` — por isso não há escrita
+perdida nem conflito a resolver no transporte.
+
+O objeto sobe **comprimido com zstd**: o log guarda o texto inteiro de cada
+versão de página, e a compressão acha as repetições (como os packfiles do
+git) — num log simulado com 150 páginas editadas 20 vezes, 18 MB viram 0,77 MB.
+Quem lê reconhece o formato pelo conteúdo, então os `.jsonl` sem compressão
+(os da extensão e os de antes) seguem valendo; o `.jsonl` antigo de quem
+passou a comprimir fica congelado no bucket e o dedup absorve a repetição. O
+log local continua JSONL puro.
+
+Configuração: `PNN_S3_BUCKET` (e `PNN_S3_PREFIX`, `PNN_S3_ENDPOINT`,
+`PNN_S3_REGION`); as credenciais vêm da cadeia padrão da AWS, nunca de `~/.pnn`.
 
 ---
 

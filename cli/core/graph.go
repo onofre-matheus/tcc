@@ -104,6 +104,9 @@ func Graph(events []Event, p Params) (GraphState, error) {
 		}
 	}
 	for _, link := range links.Links {
+		if !graphLink(link) {
+			continue // conexão com página ou tarefa ainda não entra no grafo (§4.14)
+		}
 		for _, end := range []string{link.From, link.To} {
 			if node, ok := ParseNode(end); ok && node.Kind == NodeTag {
 				addTag(node.ID)
@@ -185,4 +188,17 @@ func Graph(events []Event, p Params) (GraphState, error) {
 		state.Edges = append(state.Edges, edge)
 	}
 	return state, nil
+}
+
+// graphLink diz se a conexão entra no grafo: as duas pontas são cartão, deck
+// ou tag. Conexão com página ou tarefa (1.6) ainda não entra — nem a tag que
+// só aparece como a outra ponta dela, que ficaria solta no desenho.
+func graphLink(link Link) bool {
+	for _, end := range []string{link.From, link.To} {
+		node, ok := ParseNode(end)
+		if !ok || (node.Kind != NodeCard && node.Kind != NodeDeck && node.Kind != NodeTag) {
+			return false
+		}
+	}
+	return true
 }

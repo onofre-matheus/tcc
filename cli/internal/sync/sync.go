@@ -6,8 +6,8 @@
 //
 // A decisão que faz isso funcionar sem servidor é o layout:
 //
-//	<prefixo>/<device>.jsonl — um objeto por dispositivo, e cada dispositivo
-//	                           escreve SOMENTE o seu
+//	<prefixo>/<device>.jsonl.zst — um objeto por dispositivo, e cada
+//	                               dispositivo escreve SOMENTE o seu
 //
 // Como dois clientes nunca gravam a mesma chave, não existe escrita perdida —
 // o problema clássico do "push do arquivo inteiro", em que o último a subir
@@ -15,6 +15,13 @@
 // condicional nem retry: baixar tudo e unir é sempre seguro, porque evento é
 // fato imutável com id único e a união de dois logs é o log completo. A ordem
 // total e o dedup ficam onde já estavam, em core.Normalize (SPEC §2).
+//
+// O objeto vai comprimido com zstd (SPEC §5): o log guarda o texto inteiro de
+// cada versão de página — como o git, que grava o arquivo inteiro e deixa a
+// compressão achar as repetições —, e cada sync reenvia o objeto todo. Quem lê
+// reconhece o formato pelo conteúdo (o número mágico do zstd), não pelo nome:
+// objetos .jsonl de antes (ou de clientes que não comprimem, como a
+// extensão) seguem valendo.
 package sync
 
 import (
@@ -23,8 +30,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/onofre-matheus/tcc/cli/core"
 	"github.com/onofre-matheus/tcc/cli/store"
 )
@@ -79,7 +88,7 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 	var incoming []core.Event
 	etags := map[string]string{}
 	for _, obj := range objects {
-		if !strings.HasSuffix(obj.Key, ".jsonl") {
+		if !isLogKey(obj.Key) {
 			continue // o bucket pode ser compartilhado com outra coisa
 		}
 		if cur.ETags[obj.Key] == obj.ETag && obj.ETag != "" {
@@ -90,7 +99,7 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 		if err != nil {
 			return Result{}, fmt.Errorf("baixar %s: %w", obj.Key, err)
 		}
-		incoming = append(incoming, parseLog(body)...)
+		incoming = append(incoming, parseLog(decodeObject(body))...)
 		etags[obj.Key] = obj.ETag
 	}
 
@@ -113,10 +122,17 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 	}
 	// Sobe quando há evento novo meu — ou quando meu objeto sumiu do bucket
 	// (apagado à mão), caso em que o cursor mente ao dizer que já foi enviado.
-	key := prefix + device + ".jsonl"
+	// É também o que migra quem vinha do .jsonl: o .zst ainda não existe, então
+	// sobe no primeiro sync; o .jsonl antigo fica congelado (a política não
+	// deixa apagar) e o dedup por id absorve a repetição.
+	key := prefix + device + zstdSuffix
 	_, inBucket := etags[key]
 	if len(mine) > 0 && (result.Sent > 0 || !inBucket) {
-		etag, err := bucket.Put(ctx, key, encodeLog(mine))
+		body, err := encodeObject(mine)
+		if err != nil {
+			return Result{}, err
+		}
+		etag, err := bucket.Put(ctx, key, body)
 		if err != nil {
 			return Result{}, fmt.Errorf("enviar %s: %w", key, err)
 		}
@@ -178,6 +194,48 @@ func parseLog(body []byte) []core.Event {
 		events = append(events, event)
 	}
 	return events
+}
+
+const (
+	plainSuffix = ".jsonl"
+	zstdSuffix  = ".jsonl.zst"
+)
+
+// zstdMagic abre todo frame zstd (RFC 8878): é por ele, e não pelo nome, que
+// se sabe se o objeto veio comprimido.
+var zstdMagic = []byte{0x28, 0xB5, 0x2F, 0xFD}
+
+func isLogKey(key string) bool {
+	return strings.HasSuffix(key, plainSuffix) || strings.HasSuffix(key, zstdSuffix)
+}
+
+// O encoder é reaproveitável (EncodeAll é seguro em uso concorrente) e
+// criá-lo custa mais do que usá-lo. O decoder é por objeto, em modo stream,
+// para salvar o começo de um frame truncado.
+var zstdEncoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
+
+// encodeObject é o objeto que sobe: o JSONL dos eventos, comprimido.
+func encodeObject(events []core.Event) ([]byte, error) {
+	if zstdEncoder == nil {
+		return nil, fmt.Errorf("zstd indisponível")
+	}
+	return zstdEncoder.EncodeAll(encodeLog(events), nil), nil
+}
+
+// decodeObject devolve o JSONL de um objeto do bucket, comprimido ou não. Um
+// frame zstd truncado não derruba o sync: os blocos inteiros que saírem
+// (até 128 KB cada) seguem para o parseLog, que pula a linha final quebrada.
+func decodeObject(body []byte) []byte {
+	if !bytes.HasPrefix(body, zstdMagic) {
+		return body
+	}
+	dec, err := zstd.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	defer dec.Close()
+	out, _ := io.ReadAll(dec) // em erro, fica com o que já saiu
+	return out
 }
 
 func encodeLog(events []core.Event) []byte {

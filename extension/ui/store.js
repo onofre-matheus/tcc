@@ -22,6 +22,7 @@ import { project as study } from "../core/study.js";
 import { project as links, cleanNode } from "../core/links.js";
 import { project as studies } from "../core/studies.js";
 import { project as graph } from "../core/graph.js";
+import { project as pages } from "../core/pages.js";
 import { attentionWindowSeconds } from "../core/attention.js";
 
 // Entrada livre de tags e tags efetivas (cartão ∪ deck), para a UI.
@@ -81,6 +82,9 @@ export const state = {
   study: (filter = {}) => log.project(study, { ...dayParams(), ...filter }),
   // Conexões (spec §4.12): { links, neighbors, nodes }.
   links: () => log.project(links),
+  // Páginas (spec §4.15): { pages, order } — por ora só para rotular o nó
+  // `page:` nas conexões; a escrita das páginas é da CLI.
+  pages: () => log.project(pages),
   // Sessões salvas (spec §4.13): { studies, order }.
   studies: () => log.project(studies),
   // Grafo do acervo (spec §4.14): { nodes, edges }, para a tela de grafo.
@@ -166,8 +170,10 @@ export const reviewCard = (card_id, result, session_id) =>
 export const practiceCard = (card_id, result, session_id) =>
   log.append("card.practiced", { card_id, result, ...(session_id ? { session_id } : {}) });
 
-// Conexão explícita entre dois nós { kind: "card"|"deck"|"tag", id }
-// (catálogo 1.4); relation é livre ("prerequisito", "exemplo"…).
+// Sinapse — a conexão explícita entre dois nós { kind, id } (catálogo 1.4;
+// "sinapse" nas telas desde o 1.6); relation é livre ("prerequisito"…). As
+// telas não criam mais sinapse com ponta tag: ligar a uma tag classifica
+// (tagCard).
 export async function linkNodes(from, to, relation) {
   const a = cleanNode(from), b = cleanNode(to);
   if (!a || !b) throw new Error("nó inválido");
@@ -175,6 +181,21 @@ export async function linkNodes(from, to, relation) {
   const link_id = id("l");
   await log.append("link.created", { link_id, from: a, to: b, ...(rel ? { relation: rel } : {}) });
   return link_id;
+}
+
+// Classificar (1.6): a tag é campo do cartão, não ponta de sinapse — acrescenta
+// a tag às próprias do cartão (o card.edited leva a lista final, LWW por
+// campo). false = o cartão não existe ou já tinha a tag (própria ou do deck).
+export async function tagCard(card_id, tag) {
+  const t = normalizeTag(tag);
+  const [{ cards }, { decks }] = await Promise.all([state.leitner(), state.decks()]);
+  const card = cards[card_id];
+  if (!card || !t) return false;
+  const own = card.tags ?? [];
+  const deckTags = card.deck_id ? decks[card.deck_id]?.tags ?? [] : [];
+  if (own.includes(t) || deckTags.includes(t)) return false;
+  await editCard(card_id, { tags: normalizeTags([...own, t]) });
+  return true;
 }
 
 // Desligar remove todas as conexões do par: duas criadas em dispositivos

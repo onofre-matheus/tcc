@@ -19,7 +19,11 @@ func fakeS3(t *testing.T, objects map[string]string) (*httptest.Server, *[]strin
 	var seen []string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = append(seen, r.Method+" "+r.URL.Path)
+		entry := r.Method + " " + r.URL.Path
+		if r.Method == http.MethodPut {
+			entry += " " + r.Header.Get("Content-Type")
+		}
+		seen = append(seen, entry)
 
 		switch {
 		case r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2":
@@ -168,5 +172,42 @@ func TestSemCredencialDizOQueFazer(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "IMDS") {
 		t.Fatalf("a mensagem não deveria vazar jargão do SDK: %v", err)
+	}
+}
+
+// O ciclo inteiro pelo SDK, sobre HTTP: o objeto sobe em .jsonl.zst como
+// application/zstd (sem Content-Encoding, que faria um cliente descomprimir
+// por conta própria), e outro dispositivo o baixa e lê.
+func TestSyncPeloS3SobeZstd(t *testing.T) {
+	s3Credentials(t)
+	objects := map[string]string{}
+	srv, seen := fakeS3(t, objects)
+	bucket, err := NewBucket(context.Background(), Config{Bucket: "meu-bucket", Prefix: "pnn/", Endpoint: srv.URL, Region: "us-east-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := newDevice(t), newDevice(t)
+	if _, err := a.Append("page.created", map[string]any{"page_id": "p1", "title": "docs", "body": "ação", "tags": []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), a, bucket, "pnn/"); err != nil {
+		t.Fatal(err)
+	}
+	device, _ := a.DeviceID()
+	key := "pnn/" + device + ".jsonl.zst"
+	if !strings.HasPrefix(objects[key], string(zstdMagic)) {
+		t.Fatalf("o objeto sobe comprimido em %s: %v", key, *seen)
+	}
+	if !slicesContains(*seen, "PUT /meu-bucket/"+key+" application/zstd") {
+		t.Fatalf("o PUT vai como application/zstd: %v", *seen)
+	}
+
+	got, err := Run(context.Background(), b, bucket, "pnn/")
+	if err != nil || got.Received != 1 {
+		t.Fatalf("o outro dispositivo baixa e lê o .zst: %+v %v", got, err)
+	}
+	events, _ := b.Events()
+	if !strings.Contains(string(events[0].Payload), "ação") {
+		t.Fatalf("o texto chega intacto: %s", events[0].Payload)
 	}
 }

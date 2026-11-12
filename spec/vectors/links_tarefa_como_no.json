@@ -1,0 +1,43 @@
+{
+  "name": "tarefa como ponta de sinapse (1.6): liga a página e a cartão; concluída mantém as sinapses; apagada perde as que tinha (tombstone) e não ganha novas; tarefa inexistente não se liga",
+  "projection": "links",
+  "now": "2026-07-02T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "task.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Terminar a documentação" } },
+    { "id": "evt-02", "type": "task.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2", "title": "Apagada depois" } },
+    { "id": "evt-03", "type": "page.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "page_id": "p1", "title": "docs cli", "body": "", "tags": [] } },
+    { "id": "evt-04", "type": "card.created", "v": 2, "lc": 4, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "O que é um Pod?", "back": "a menor unidade", "tags": [] } },
+    { "id": "evt-05", "type": "link.created", "v": 1, "lc": 5, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "task", "id": "t1" }, "to": { "kind": "page", "id": "p1" } } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "page", "id": "p1" }, "to": { "kind": "task", "id": "t2" } } },
+    { "id": "evt-07", "type": "link.created", "v": 1, "lc": 7, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "link_id": "l3", "from": { "kind": "task", "id": "t1" }, "to": { "kind": "card", "id": "c1" }, "relation": "pratica" } },
+    { "id": "evt-08", "type": "task.completed", "v": 1, "lc": 8, "ts": "2026-07-01T12:00:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1" } },
+    { "id": "evt-09", "type": "task.deleted", "v": 1, "lc": 9, "ts": "2026-07-01T12:01:00Z", "device": "dev-a",
+      "payload": { "task_id": "t2" } },
+    { "id": "evt-10", "type": "link.created", "v": 1, "lc": 10, "ts": "2026-07-01T12:02:00Z", "device": "dev-a",
+      "payload": { "link_id": "l4", "from": { "kind": "task", "id": "t2" }, "to": { "kind": "card", "id": "c1" } } },
+    { "id": "evt-11", "type": "link.created", "v": 1, "lc": 11, "ts": "2026-07-01T12:03:00Z", "device": "dev-a",
+      "payload": { "link_id": "l5", "from": { "kind": "task", "id": "t9" }, "to": { "kind": "page", "id": "p1" } } }
+  ],
+  "expected": {
+    "links": {
+      "l1": { "from": "task:t1", "to": "page:p1", "relation": null },
+      "l3": { "from": "task:t1", "to": "card:c1", "relation": "pratica" }
+    },
+    "neighbors": {
+      "card:c1": ["task:t1"],
+      "page:p1": ["task:t1"],
+      "task:t1": ["card:c1", "page:p1"]
+    },
+    "nodes": ["card:c1", "page:p1", "task:t1"]
+  }
+}

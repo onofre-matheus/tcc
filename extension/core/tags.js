@@ -6,6 +6,9 @@
 
 import { project as leitner } from "./leitner.js";
 import { project as decksProjection } from "./decks.js";
+// pages.js também importa daqui; o ciclo é seguro porque nenhum dos dois usa
+// o outro na avaliação do módulo, só dentro das funções.
+import { project as pagesProjection } from "./pages.js";
 
 // Apara, tira os "#" iniciais, minúsculas, espaço interno vira "-" e
 // segmentos "/" vazios somem. Tag que sobra vazia devolve "".
@@ -66,16 +69,21 @@ export function project(events, { now, tz }) {
   const tags = {};
   for (const deck of Object.values(decks)) {
     if (deck.archived) continue;
-    for (const tag of deck.tags) tags[tag] ??= { cards: 0, due: 0 };
+    for (const tag of deck.tags) tags[tag] ??= { cards: 0, due: 0, pages: 0 };
   }
   const due = new Set(lt.queue);
   for (const [id, card] of Object.entries(lt.cards)) {
     if (!activeCard(card, decks)) continue;
     for (const tag of effectiveTags(card, decks)) {
-      const info = (tags[tag] ??= { cards: 0, due: 0 });
+      const info = (tags[tag] ??= { cards: 0, due: 0, pages: 0 });
       info.cards += 1;
       if (due.has(id)) info.due += 1;
     }
+  }
+  // páginas não arquivadas com a tag exata (1.6)
+  for (const page of Object.values(pagesProjection(events).pages)) {
+    if (page.archived) continue;
+    for (const tag of page.tags) (tags[tag] ??= { cards: 0, due: 0, pages: 0 }).pages += 1;
   }
   // Ordem canônica por unidade de código (igual à comparação de bytes do Go
   // para o plano básico), nunca localeCompare: a saída não depende do locale.

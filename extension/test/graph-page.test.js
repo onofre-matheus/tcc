@@ -57,20 +57,43 @@ describe("tela de grafo", () => {
     change("depth");
   });
 
-  it("🔗 ligar a… e clique no destino grava link.created; ✕ desfaz", async () => {
+  it("⚡ ligar a…: numa tag classifica o cartão; noutro cartão cria sinapse; ✕ desfaz", async () => {
+    // relação é de sinapse: com uma tag, recusa sem gravar
     $("linkRelation").value = "exemplo";
     $("linkMode").click();
     expect($("infoMsg").textContent).toContain("clique no nó de destino");
+    click("tag:redes");
+    await settle();
+    expect($("infoMsg").textContent).toContain("tire a relação");
+    expect(await lastOf("card.edited")).toBeUndefined();
+
+    // sem relação, a tag classifica o cartão em foco (c1), sem sinapse
+    $("linkRelation").value = "";
+    $("linkMode").click();
+    click("tag:redes");
+    await settle();
+    expect((await lastOf("card.edited")).payload).toEqual({ card_id: "c1", tags: ["so/threads", "redes"] });
+    expect($("infoMsg").textContent).toContain("🏷 tag adicionada");
+
+    // a tag do deck já conta: nada a gravar
+    $("linkMode").click();
     click("tag:sistemas");
     await settle();
+    expect($("infoMsg").textContent).toBe("já tem #sistemas");
+
+    $("linkRelation").value = "exemplo";
+    $("linkMode").click();
+    click("card:c2");
+    await settle();
     expect((await lastOf("link.created")).payload).toMatchObject({
-      from: { kind: "card", id: "c1" }, to: { kind: "tag", id: "sistemas" }, relation: "exemplo",
+      from: { kind: "card", id: "c1" }, to: { kind: "card", id: "c2" }, relation: "exemplo",
     });
+    expect($("infoMsg").textContent).toContain("⚡ sinapse");
     expect(document.querySelectorAll("#canvas .edge.link")).toHaveLength(2);
 
-    $("infoLinks").querySelector("[data-unlink]").click(); // o primeiro par: OSI
+    $("infoLinks").querySelector("[data-unlink]").click(); // o par c1–c2: as duas sinapses
     await settle();
-    expect((await lastOf("link.removed")).payload).toEqual({ link_id: "l1" });
+    expect(document.querySelectorAll("#canvas .edge.link")).toHaveLength(0);
   });
 
   it("estudar ao redor manda o filtro ao side panel pelo storage", () => {

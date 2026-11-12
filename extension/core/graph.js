@@ -37,6 +37,7 @@ export function project(events, { now, tz }) {
     deck.tags.forEach(addTag);
   }
   for (const link of Object.values(lk.links)) {
+    if (!graphLink(link)) continue; // conexão com página ainda não entra no grafo (§4.14)
     for (const end of [link.from, link.to]) {
       const node = parseNode(end);
       if (node?.kind === "tag") addTag(node.id);
@@ -83,4 +84,11 @@ export function project(events, { now, tz }) {
     return !prev || prev.from !== e.from || prev.to !== e.to || prev.kind !== e.kind || rel(prev.relation) !== rel(e.relation);
   });
   return { nodes: [...nodes.values()].sort((a, b) => cmp(a.id, b.id)), edges: unique };
+}
+
+// A conexão entra no grafo se as duas pontas são cartão, deck ou tag. Conexão
+// com página (1.6) ainda não entra — nem a tag que só aparece como a outra
+// ponta dela, que ficaria solta no desenho.
+function graphLink(link) {
+  return [link.from, link.to].every((end) => ["card", "deck", "tag"].includes(parseNode(end)?.kind));
 }

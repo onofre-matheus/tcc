@@ -4,7 +4,11 @@
 package sync
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -187,7 +191,7 @@ func TestCadaDispositivoEscreveSomenteASuaChave(t *testing.T) {
 		t.Fatalf("esperava um objeto por dispositivo, veio %d", len(bucket.objects))
 	}
 	for key, body := range bucket.objects {
-		events := parseLog(body)
+		events := parseLog(decodeObject(body))
 		if len(events) != 1 {
 			t.Fatalf("%s deveria conter só os eventos do seu dono, tem %d", key, len(events))
 		}
@@ -240,4 +244,116 @@ func slicesContains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// --- compressão (SPEC §5) ---
+
+// O objeto sobe comprimido, na chave .jsonl.zst, e volta igual.
+func TestObjetoSobeComprimidoComZstd(t *testing.T) {
+	bucket := newFakeBucket()
+	a := newDevice(t)
+	for i := range 50 {
+		if _, err := a.Append("page.edited", map[string]any{"page_id": "p1", "body": strings.Repeat("texto da página, versão inteira. ", 60) + fmt.Sprint(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	syncNow(t, a, bucket)
+
+	device, _ := a.DeviceID()
+	body, ok := bucket.objects["pnn/"+device+".jsonl.zst"]
+	if !ok || !bytes.HasPrefix(body, zstdMagic) {
+		t.Fatalf("o objeto do dispositivo sobe em .jsonl.zst, comprimido: %v", keys(bucket))
+	}
+	events, _ := a.Events()
+	if raw := encodeLog(events); len(body)*10 > len(raw) {
+		t.Fatalf("versões inteiras da mesma página comprimem muito: %d → %d bytes", len(raw), len(body))
+	}
+	if got := len(parseLog(decodeObject(body))); got != 50 {
+		t.Fatalf("o objeto descomprime para os mesmos eventos: %d", got)
+	}
+}
+
+// Quem lê aceita os dois formatos — pelo conteúdo, não pelo nome: o .jsonl de
+// quem não comprime (a extensão) e o .zst gerado pelo encoder da CLI
+// (spec/sync/objeto_cli.jsonl.zst, o mesmo que o teste da extensão lê).
+func TestLeObjetoPuroEComprimido(t *testing.T) {
+	bucket := newFakeBucket()
+	plain, err := os.ReadFile(filepath.Join("..", "..", "..", "spec", "sync", "objeto_cli.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zst, err := os.ReadFile(filepath.Join("..", "..", "..", "spec", "sync", "objeto_cli.jsonl.zst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decodeObject(zst), plain) {
+		t.Fatal("o objeto de referência descomprime para o JSONL de referência")
+	}
+	bucket.objects["pnn/dev-extensao.jsonl"] = []byte(`{"id":"ext-1","type":"note.captured","v":1,"lc":1,"ts":"2026-07-27T22:00:00.000Z","device":"dev-extensao","payload":{"note_id":"n1","text":"oi"}}` + "\n")
+	bucket.objects["pnn/dev-cli-go.jsonl.zst"] = zst
+	bucket.objects["pnn/outra-coisa.txt"] = []byte("não é log")
+
+	if got := syncNow(t, newDevice(t), bucket); got.Received != 4 {
+		t.Fatalf("1 evento do .jsonl + 3 do .jsonl.zst: %+v", got)
+	}
+}
+
+// Quem vinha do .jsonl migra sozinho: sem evento novo, o primeiro sync sobe
+// o .zst; o .jsonl antigo fica (a política não deixa apagar) e quem baixa os
+// dois não duplica nada.
+func TestMigraDoJsonlParaZstSemDuplicar(t *testing.T) {
+	bucket := newFakeBucket()
+	a := newDevice(t)
+	for range 3 {
+		if _, err := a.Append("task.created", map[string]any{"task_id": "t"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	device, _ := a.DeviceID()
+	events, _ := a.Events()
+	bucket.objects["pnn/"+device+".jsonl"] = encodeLog(events) // o que a versão anterior subiu
+	if err := a.SetCursor([]byte(`{"etags":{},"pushed":3}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := syncNow(t, a, bucket); got.Sent != 0 {
+		t.Fatalf("nenhum evento novo: %+v", got)
+	}
+	if _, ok := bucket.objects["pnn/"+device+".jsonl.zst"]; !ok {
+		t.Fatalf("o .zst sobe mesmo sem evento novo: %v", keys(bucket))
+	}
+	nova := newDevice(t)
+	if got := syncNow(t, nova, bucket); got.Received != 3 {
+		t.Fatalf("os dois objetos do mesmo dispositivo não duplicam: %+v", got)
+	}
+}
+
+// Frame zstd cortado no meio (o PUT do S3 é atômico, mas um objeto pode ser
+// copiado à mão): não derruba o sync, e os outros objetos chegam. Do cortado,
+// só sai o que fecha bloco inteiro (até 128 KB) — num objeto pequeno, nada.
+func TestZstTruncadoNaoDerrubaOSync(t *testing.T) {
+	bucket := newFakeBucket()
+	var lines []core.Event
+	for i := range 200 {
+		lines = append(lines, core.Event{ID: fmt.Sprintf("e%03d", i), Type: "task.created", V: 1, LC: int64(i + 1),
+			TS: "2026-07-27T22:00:00.000Z", Device: "dev-x", Payload: []byte(fmt.Sprintf(`{"task_id":"t%d","title":"%s"}`, i, strings.Repeat("x", 200)))})
+	}
+	body, err := encodeObject(lines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bucket.objects["pnn/dev-x.jsonl.zst"] = body[:len(body)*2/3]
+	bucket.objects["pnn/dev-y.jsonl"] = []byte(`{"id":"y1","type":"task.created","v":1,"lc":1,"ts":"2026-07-27T22:00:00.000Z","device":"dev-y","payload":{"task_id":"y"}}` + "\n")
+
+	if got := syncNow(t, newDevice(t), bucket); got.Received < 1 {
+		t.Fatalf("o objeto íntegro chega mesmo com o outro cortado: %+v", got)
+	}
+}
+
+func keys(b *fakeBucket) []string {
+	var out []string
+	for key := range b.objects {
+		out = append(out, key)
+	}
+	return out
 }

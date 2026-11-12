@@ -23,7 +23,7 @@ func newTagsCmd(a *app.App) *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "tags",
-		Short: "lista as tags em árvore (a/b) com cartões, vencidos e conexões de cada uma",
+		Short: "lista as tags em árvore (a/b) com cartões, páginas, vencidos e sinapses de cada uma",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			events, err := a.Store.Events()
@@ -45,7 +45,7 @@ func newTagsCmd(a *app.App) *cobra.Command {
 
 			th := ui.Theme{On: a.Color}
 			if len(tags.Names) == 0 {
-				fmt.Fprintf(a.Out, "%s\n", th.Dim("nenhuma tag — use `pnn carta --tag so` ou `pnn editar N --tag so`"))
+				fmt.Fprintf(a.Out, "%s\n", th.Dim("nenhuma tag — use `pnn carta --tag so`, `pnn editar N --tag so` ou `pnn ligar N '#so'`"))
 				return a.SaveView(nil)
 			}
 
@@ -62,6 +62,10 @@ func newTagsCmd(a *app.App) *cobra.Command {
 				return err
 			}
 			leitner, err := core.Leitner(events, a.Params())
+			if err != nil {
+				return err
+			}
+			pages, err := core.Pages(events)
 			if err != nil {
 				return err
 			}
@@ -102,12 +106,22 @@ func newTagsCmd(a *app.App) *cobra.Command {
 				if depth == 0 {
 					label = "#" + label
 				}
+				// páginas pela mesma regra da hierarquia: a tag ou as descendentes
+				nPages := 0
+				for _, id := range pages.Order {
+					if slices.ContainsFunc(pages.Pages[id].Tags, func(t string) bool { return core.TagUnder(t, path) }) {
+						nPages++
+					}
+				}
 				line := fmt.Sprintf(" %d %s%s  %s", i+1, strings.Repeat("  ", depth), label, th.Dim(plural(cards, "cartão", "cartões")))
+				if nPages > 0 {
+					line += "  " + th.Dim(plural(nPages, "página", "páginas"))
+				}
 				if dueCards > 0 {
 					line += "  " + th.Red(plural(dueCards, "vencido", "vencidos"))
 				}
 				if n := len(links.Neighbors[core.NodeTag+":"+path]); n > 0 {
-					line += "  " + th.Dim(fmt.Sprintf("🔗%d", n))
+					line += "  " + th.Dim(fmt.Sprintf("⚡%d", n))
 				}
 				fmt.Fprintln(a.Out, line)
 			}

@@ -1,10 +1,17 @@
 // Sincronização por bucket S3 (spec/SPEC.md §5) — o mesmo algoritmo da CLI
 // Go (`cli/internal/sync/sync.go`), sobre o EventLog da extensão.
 //
-// O layout é o que dispensa servidor: `<prefixo>/<device>.jsonl`, um objeto
-// por dispositivo, e cada dispositivo escreve SOMENTE o seu. Como dois
+// O layout é o que dispensa servidor: `<prefixo>/<device>.jsonl[.zst]`, um
+// objeto por dispositivo, e cada dispositivo escreve SOMENTE o seu. Como dois
 // clientes nunca gravam a mesma chave, não existe escrita perdida — e a
 // extensão e a CLI são, para o bucket, apenas dois dispositivos quaisquer.
+//
+// A CLI sobe o objeto comprimido com zstd (.jsonl.zst): o log guarda o texto
+// inteiro de cada versão de página, e a compressão acha as repetições. A
+// extensão lê os dois formatos — reconhecidos pelo conteúdo, não pelo nome —
+// e sobe o seu sem comprimir: é pequeno, e descomprimir é o que basta aqui.
+
+import { decompress } from "../vendor/fzstd.js";
 
 /**
  * Um ciclo completo: baixa o que mudou, funde, sobe o que é meu.
@@ -26,12 +33,12 @@ export async function sync(log, bucket, prefix) {
   const incoming = [];
   const etags = {};
   for (const object of objects) {
-    if (!object.key.endsWith(".jsonl")) continue; // o bucket pode ter outra coisa
+    if (!isLogKey(object.key)) continue; // o bucket pode ter outra coisa
     if (object.etag && cursor.etags[object.key] === object.etag) {
       etags[object.key] = object.etag;
       continue;
     }
-    incoming.push(...parseLog(await bucket.get(object.key)));
+    incoming.push(...parseLog(decodeObject(await bucket.get(object.key))));
     etags[object.key] = object.etag;
   }
 
@@ -62,6 +69,27 @@ export async function sync(log, bucket, prefix) {
 function normalizeCursor(raw, localEvents) {
   if (!raw || localEvents === 0) return { etags: {}, pushed: 0 };
   return { etags: raw.etags ?? {}, pushed: raw.pushed ?? 0 };
+}
+
+const isLogKey = (key) => key.endsWith(".jsonl") || key.endsWith(".jsonl.zst");
+
+// Todo frame zstd começa com 28 B5 2F FD (RFC 8878).
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
+
+// O JSONL de um objeto do bucket, comprimido ou não (texto também é aceito,
+// para buckets em memória). Um zstd ilegível vira "" — o objeto é pulado sem
+// derrubar o sync, como a linha corrompida no parseLog.
+export function decodeObject(body) {
+  if (typeof body === "string") return body;
+  const bytes = body instanceof Uint8Array ? body : new Uint8Array(body);
+  if (ZSTD_MAGIC.every((b, i) => bytes[i] === b)) {
+    try {
+      return new TextDecoder().decode(decompress(bytes));
+    } catch {
+      return "";
+    }
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 // Linha ilegível é pulada, não derruba o sync: um objeto truncado por um

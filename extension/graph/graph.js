@@ -1,6 +1,7 @@
 // Tela de grafo (spec §4.14), estilo Obsidian: desenha a projeção `graph`
-// com o layout de forças de ui/force.js. Daqui também se conecta (🔗 ligar a…
-// e clique no destino), se desfaz conexão e se pede ao side panel uma revisão
+// com o layout de forças de ui/force.js. Daqui também se cria sinapse (⚡ ligar
+// a… e clique no destino; numa tag, classifica o cartão), se desfaz sinapse e
+// se pede ao side panel uma revisão
 // "ao redor" do nó — pelo storage, porque é outra página.
 
 import * as store from "../ui/store.js";
@@ -192,14 +193,14 @@ function renderInfo() {
     const arrow = p.out && p.in ? "↔" : p.out ? "→" : "←";
     const rel = p.relations.size ? ` <span class="meta">(${esc([...p.relations].sort().join(", "))})</span>` : "";
     return `<div class="link-item"><span class="grow"><span class="jump" data-jump="${esc(other)}">${arrow} ${esc(labelOf(nodeById(other)) || other)}</span>${rel}</span>
-      <button type="button" class="btn ghost sm" data-unlink="${i}" title="Desfazer a conexão">✕</button></div>`;
+      <button type="button" class="btn ghost sm" data-unlink="${i}" title="Desfazer a sinapse">✕</button></div>`;
   });
-  $("infoLinks").innerHTML = items.length ? `<div class="meta">🔗 conexões</div>${items.join("")}` : '<div class="meta">sem conexões explícitas</div>';
+  $("infoLinks").innerHTML = items.length ? `<div class="meta">⚡ sinapses</div>${items.join("")}` : '<div class="meta">sem sinapses</div>';
   const pairList = [...pairs.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
   $("infoLinks").querySelectorAll("[data-unlink]").forEach((b) => {
     b.onclick = async () => {
       await store.unlinkAll(pairList[Number(b.dataset.unlink)][1].ids);
-      $("infoMsg").textContent = "conexão desfeita";
+      $("infoMsg").textContent = "sinapse desfeita";
     };
   });
 
@@ -212,7 +213,7 @@ function renderInfo() {
     });
   $("infoOther").innerHTML = other.length ? `também: ${other.join(" · ")}` : "";
   info.querySelectorAll("[data-jump]").forEach((j) => (j.onclick = () => select(j.dataset.jump, { center: true })));
-  $("linkMode").textContent = linkFrom ? "cancelar ligação" : "🔗 ligar a…";
+  $("linkMode").textContent = linkFrom ? "cancelar ligação" : "⚡ ligar a…";
 }
 
 function select(id, { center = false } = {}) {
@@ -230,20 +231,42 @@ function select(id, { center = false } = {}) {
   renderInfo();
 }
 
+// Tag classifica, não é ponta de sinapse (1.6): cartão ↔ tag dá a tag ao
+// cartão; deck ↔ tag e tag ↔ tag são recusados (as tags do deck são as da
+// criação; assuntos se relacionam por páginas, na CLI). Devolve a mensagem,
+// ou null quando o par é de sinapse.
+async function classify(from, target, relation) {
+  const a = store.parseNode(from), b = store.parseNode(target);
+  if (a.kind !== "tag" && b.kind !== "tag") return null;
+  if (a.kind === "tag" && b.kind === "tag") return "tags não se ligam — para relacionar assuntos, crie páginas para eles (pnn p) e ligue as páginas";
+  const [item, tag] = a.kind === "tag" ? [b, a] : [a, b];
+  if (item.kind === "deck") return "deck não ganha tag pelo ligar — as tags do deck são as da criação";
+  if (relation) return "relação é de sinapse; tag classifica — tire a relação para dar a tag ao cartão";
+  const added = await store.tagCard(item.id, tag.id);
+  return added ? `🏷 tag adicionada: ${labelOf(nodeById(`${item.kind}:${item.id}`))}  #${tag.id}` : `já tem #${tag.id}`;
+}
+
 async function linkTo(target) {
   const from = linkFrom;
   linkFrom = null;
   const relation = $("linkRelation").value.trim();
+  const classified = await classify(from, target, relation);
+  if (classified !== null) {
+    $("infoMsg").textContent = classified;
+    applySelection();
+    renderInfo();
+    return;
+  }
   const already = Object.values(links.links).filter(
     (l) => (l.from === from && l.to === target) || (l.from === target && l.to === from)
   );
   // Redundante: sem relação, o par já ligado; com relação, a mesma relação.
   if (already.length && (!relation || already.some((l) => l.relation === relation))) {
-    $("infoMsg").textContent = `já ligado a ${labelOf(nodeById(target))}`;
+    $("infoMsg").textContent = `já há sinapse com ${labelOf(nodeById(target))}`;
   } else {
     await store.linkNodes(store.parseNode(from), store.parseNode(target), relation);
     $("linkRelation").value = "";
-    $("infoMsg").textContent = `🔗 ligado: ${labelOf(nodeById(from))} → ${labelOf(nodeById(target))}`;
+    $("infoMsg").textContent = `⚡ sinapse: ${labelOf(nodeById(from))} → ${labelOf(nodeById(target))}`;
   }
   applySelection();
   renderInfo();

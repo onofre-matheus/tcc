@@ -115,7 +115,7 @@ func newCartasCmd(a *app.App) *cobra.Command {
 					status = "#" + strings.Join(r.card.Tags, " #") + " · " + status
 				}
 				if n := len(links.Neighbors[core.NodeCard+":"+r.id]); n > 0 {
-					status += fmt.Sprintf(" · 🔗%d", n)
+					status += fmt.Sprintf(" · ⚡%d", n)
 				}
 				fmt.Fprintf(a.Out, " %d  %s  %s\n", i+1, r.card.Front, th.Dim(status))
 			}

@@ -690,13 +690,13 @@ func TestRevisarMostraConexoesSoDepoisDoVerso(t *testing.T) {
 	m := NewRevisar(RevisarConfig{SessionID: "r1", Cards: cards, Minutes: 25, PauseMinutes: 5, Emit: emit})
 	m.Init()
 
-	if strings.Contains(m.View(), "conectado a") {
+	if strings.Contains(m.View(), "⚡ sinapses:") {
 		t.Fatalf("antes de revelar, as conexões não aparecem:\n%s", m.View())
 	}
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Revisar)
 	view := m.View()
-	if !strings.Contains(view, "conectado a") || !strings.Contains(view, `"O que é thread?" (prerequisito)`) || !strings.Contains(view, "#redes") {
+	if !strings.Contains(view, "⚡ sinapses:") || !strings.Contains(view, `"O que é thread?" (prerequisito)`) || !strings.Contains(view, "#redes") {
 		t.Fatalf("depois do verso, as conexões aparecem:\n%s", view)
 	}
 }

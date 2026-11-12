@@ -37,7 +37,8 @@ VERMELHO — sessão em andamento (foco em tarefa OU revisão)
    ▼                                            volta direto ao AZUL
 VERDE — pausa (timebreak)                       (pausa é recompensa
   descanso cronometrado + resumo da sessão      de sessão concluída)
-   │ fim da pausa (ou Enter)
+   │ Enter → novo bloco na mesma tarefa (VERMELHO)
+   │ fim da pausa → [Enter] voltar à tarefa · [q] sair
    ▼
 AZUL …
 ```
@@ -46,8 +47,14 @@ AZUL …
 - **VERMELHO**: acento quente, timer gigante, UI mínima — sinal de "executando,
   não me interrompa". Vale para `foco` e `revisar` (ambos são `session.started`).
 - **VERDE**: tons calmos. Mostra o que a sessão rendeu (minutos, revisões,
-  distrações anotadas) e os próximos passos: `[Enter]` novo foco, `[t]` triar a
-  caixa, `[q]` sair.
+  distrações anotadas) e os próximos passos: `[Enter]` voltar à tarefa (novo
+  bloco, mesmo `target_id`), `[t]` triar a caixa, `[q]` sair.
+- **Fim da pausa**: quando o timer verde toca, `pause.ended` é gravado e a tela
+  **não fecha** — espera, com o relógio parado, `[Enter]` voltar à tarefa ·
+  `[t]` triagem · `[q]` sair. Cumprir a pausa não pode custar mais do que
+  pulá-la: se o fim da pausa fechasse o programa, voltar exigiria redigitar
+  `pnn foco N`, enquanto pular com Enter mantém a tarefa — o incentivo seria
+  pular a pausa.
 - Pausa padrão de 5 min (`--pausa N` para ajustar). Desde o catálogo 1.2 a
   pausa **gera evento** (`pause.started/ended`; retroativa via `pause.logged`)
   — Safren exige pausa com duração definida, e registrá-la alimenta a
@@ -67,6 +74,7 @@ janela — é o mesmo papel que a extensão cumpre no navegador (paridade):
 |---|---|
 | timer do foco/revisão soa | urgente: "N min de foco concluídos 🐘 · pausa de M min começou" |
 | fim da pausa | urgente: "Fim da pausa · de volta ao foco" |
+| fim do bloco com a página aberta no editor (Ctrl+E) | urgente: "N min de foco concluídos 🐘 · salve e volte ao pnn para a pausa de M min" — sai pelo relógio de parede, porque a tela está parada |
 | check-in de atenção | comum: repete a pergunta que está na tela |
 
 Quem interrompe (Esc, Ctrl+C) está no teclado: não há o que avisar.
@@ -109,11 +117,11 @@ de *quando* lembrar é a projeção `reminders` compartilhada (SPEC §4.9).
 Três verbos genéricos operam sobre o item N **da última tela** — o kind salvo
 em `last-view.json` decide o evento:
 
-| Comando | task (dia) | deck (decks) | card (cartas) | appointment (agenda) | tag (tags) | study (sessoes) |
-|---|---|---|---|---|---|---|
-| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` (renomeia) |
-| `pnn apagar N` | `task.deleted` | ✗ (arquive) | ✗ (arquive) | `appointment.cancelled` | ✗ (renomeie/untag) | `study.deleted` |
-| `pnn arquivar N` | ✗ (feito/apagar) | `deck.archived` | `card.archived` | ✗ (apagar) | ✗ | ✗ |
+| Comando | task (dia) | deck (decks) | card (cartas) | appointment (agenda) | tag (tags) | study (sessoes) | page (paginas) |
+|---|---|---|---|---|---|---|---|
+| `pnn editar N ["texto"] [--data D] [--frente F] [--verso V] [--tag T] [--untag T] [--tags "…"]` | `task.edited` | `deck.renamed` | `card.edited` | — | `tag.renamed` | `study.saved` (renomeia) | `page.edited` (sem texto: abre o editor) |
+| `pnn apagar N` | `task.deleted` | ✗ (arquive) | ✗ (arquive) | `appointment.cancelled` | ✗ (renomeie/untag) | `study.deleted` | ✗ (arquive) |
+| `pnn arquivar N` | ✗ (feito/apagar) | `deck.archived` | `card.archived` | ✗ (apagar) | ✗ | ✗ | `page.archived` |
 
 A distinção segue a spec: **apagar é tombstone** (tarefa descartada e
 compromisso cancelado não têm valor histórico), **arquivar preserva** (o
@@ -127,7 +135,7 @@ inteira** — `tags` é um campo só no LWW por campo. Nada mudou, nada é grava
 
 Renomear tag (catálogo 1.4): `pnn tags` numera a árvore e `pnn editar N
 "novo-nome"` emite `tag.renamed` — a tag e as descendentes (`so/x` → `novo/x`)
-mudam em cartões, decks e conexões já gravados; renomear para uma tag que já
+mudam em cartões, páginas, decks e sinapses já gravados; renomear para uma tag que já
 existe funde as duas. Vale para o que foi gravado até ali: uma tag criada
 depois com o nome antigo é uma tag nova.
 
@@ -143,6 +151,78 @@ depois com o nome antigo é uma tag nova.
 árvore ou "(sem deck)"; tags opcionais), `[t]arefa`, `[d]escartar`, `[s]eguir`. Esvazia a lista temporária ao
 final (RF06).
 
+### Páginas (catálogo 1.6)
+
+Anotação longa e de uso constante — o que não é passagem (nota) nem estudo
+(cartão). Escreve-se no `$EDITOR` do usuário, não numa TUI.
+
+| Comando | Evento(s) |
+|---|---|
+| `pnn p "título" [--tag T]…` | `page.created` (abre o editor no corpo) |
+| `pnn paginas [--tag T]… [--todas] [--por-tag] [--arquivadas] [--json]` | — (as fixadas e as 15 editadas por último, com rodapé do que ficou de fora; numerada, com `⚡N`) |
+| `pnn pagina N\|título [-e] [--cru]` | — (lê formatada e paginada, com as referências numeradas; `-e` abre no editor → `page.edited`) |
+| `pnn buscar "texto"` | — (páginas e cartões; numerada, com o trecho que casa) |
+| `pnn fixar N` | `page.edited` com `pinned` (alterna) |
+| `pnn escrever N\|título` | `page.edited` (o editor do pnn, com os comandos `/`, fora do foco) |
+
+- **O texto é só texto; o resto é metadado.** O editor abre um `.md`
+  temporário (0600) com **só o corpo**, em markdown puro. Título, tags e
+  sinapses não se escrevem no texto — como nos cartões, mudam por comando:
+  `pnn editar N "novo título"`, `pnn editar N --tag/--untag/--tags` (ou
+  `pnn ligar N '#tag'`, que classifica), `pnn ligar`/`pnn desligar`.
+  Escrever e organizar ficam separados (como
+  captura e triagem), o texto nunca é varrido (SPEC §3, Conexões) e um corpo
+  que começa com `---` é só texto.
+- **A página mostra o que está ligado a ela**, como referência:
+
+  ```
+  📌 Documentação do portal
+  #trabalho/portal #kubernetes · editada hoje · criada ontem
+  ⚡ 2 → "O que é um Pod?"  3 ← página Diário
+  ```
+
+  As tags ficam na linha da meta (classificação); as sinapses, numeradas: a
+  página é o 1 e o que está ligado a ela, 2 em diante (`→` sai dela, `←`
+  chega nela): `pnn pagina 3` abre a página ligada, `pnn editar 2 --frente …`
+  edita o cartão, `pnn desligar 1 2` desfaz, `pnn revisar --ao-redor 1`
+  estuda os cartões ligados à página **e os das tags dela** (SPEC §4.11).
+- **Nada do que foi escrito se perde**: editor que sai com erro ou falha ao
+  gravar não perdem o texto — o temporário fica e o caminho vai na mensagem.
+  Esvaziar a página é uma edição válida (a versão anterior fica no log).
+- **Só o que mudou é gravado**: o corpo leva `base` = a `version` lida ao
+  abrir o editor (SPEC §3, Páginas). Se outra edição chegou enquanto o editor
+  estava aberto (sync, outro terminal), a CLI avisa — a detecção de conflito
+  propriamente dita lê `base` e é uma etapa futura.
+- **Editor**: `$PNN_EDITOR`, `$VISUAL`, `$EDITOR` (nessa ordem; senão
+  `editor`, `nano`, `vi`), executado pelo shell como no git (`code --wait`
+  funciona).
+- **Leitura**: o corpo é formatado com o glamour, no tema escuro por padrão
+  (`PNN_TEMA=claro`, ou `COLORFGBG` de fundo claro, troca o tema — perguntar
+  a cor de fundo ao terminal custa 5 s nos que não respondem), e passa pelo
+  paginador (`$PNN_PAGER`, `$PAGER` ou `less` com `LESS=FRX`: texto curto
+  sai direto). Fora do terminal, sem cor e sem paginador; `--cru` imprime o
+  markdown como está (`pnn pagina 1 --cru > nota.md`).
+- **Achar pelo título**: sem caixa nem acento, todas as palavras
+  (`pnn pagina manutencao cluster`). Título idêntico vence; várias
+  candidatas viram uma lista numerada. A busca (`pnn buscar`) olha título,
+  tags e texto; páginas que casam no título vêm primeiro — e, como mistura
+  páginas e cartões numa tela só, serve para ligar um ao outro
+  (`pnn buscar pod` → `pnn ligar 1 3`).
+- Arquivar e apagar seguem a tabela acima: página não se apaga — arquivar
+  preserva o texto e as sinapses.
+- `pnn tags` conta as páginas de cada tag (SPEC §4.10), junto dos cartões.
+- **A lista não vira paredão.** O acervo de páginas só cresce, então
+  `pnn paginas` mostra **as fixadas e as 15 editadas por último**, com um
+  rodapé "… e mais N — `--todas`, `--por-tag`, `--tag T` ou `pnn buscar`".
+  `--por-tag` agrupa as páginas na árvore de tags, como pastas: cada tag com
+  quantas páginas tem na subárvore e as 5 mais recentes dela (o resto, pelo
+  `--tag` indicado); a página com duas tags aparece nas duas com o mesmo
+  número, e as sem tag vão no fim. Com `--tag`, a árvore se recorta na
+  subárvore. `--todas` tira os limites; `--arquivadas` lista só as
+  arquivadas. (300 páginas: 16 linhas na lista simples, 45 na agrupada.)
+- **Ainda não**: páginas no `pnn grafo` (a sinapse com página fica fora do
+  desenho, SPEC §4.14).
+
 ### Estudo (RF08, RF09, RF11)
 
 | Comando | Evento(s) |
@@ -151,10 +231,10 @@ final (RF06).
 | `pnn deck "Pai::Filho"` | `deck.created` |
 | `pnn carta [deck] [--tag T]… [--sem-deck]` | `card.created` (interativo: frente, verso, fonte e tags opcionais; v2 sem deck) |
 | `pnn cartas [deck] [--tag T]…` | — (manutenção do acervo: numera os cartões para editar/arquivar) |
-| `pnn tags` | — (tags em árvore `/`, numerada, com cartões, vencidos e conexões de cada uma) |
-| `pnn ligar A B [C…] [--relacao R]` | `link.created` (A → B, A → C…) |
-| `pnn desligar A B [C…]` | `link.removed` (todas as conexões do par, em qualquer direção) |
-| `pnn conexoes [nó]` | — (sem nó: os nós conectados, mais conectados primeiro; com nó: a vizinhança, numerada) |
+| `pnn tags` | — (tags em árvore `/`, numerada, com cartões, páginas, vencidos e sinapses de cada uma) |
+| `pnn ligar A B [C…] [--relacao R]` | `link.created` (sinapse A → B, A → C…); com `'#tag'` de um lado: `card.edited`/`page.edited` (classifica) |
+| `pnn desligar A B [C…]` | `link.removed` (todas as sinapses do par, em qualquer direção); com `'#tag'`: tira a tag |
+| `pnn sinapses [nó]` (alias `conexoes`) | — (sem nó: o que tem sinapses, mais ligados primeiro; com nó: a vizinhança, numerada) |
 | `pnn grafo [nó] [--raio R] [--sem-cartoes] [--json]` | — (o acervo como grafo em DOT; com nó, o grafo local) |
 | `pnn sessao "Nome" [deck] [--tag T]… [--ao-redor N]… [--treino]` | `study.saved` (o mesmo nome atualiza o filtro) |
 | `pnn sessoes` | — (sessões salvas, numeradas, com vencidos e treino de cada uma hoje) |
@@ -174,24 +254,41 @@ vencidos, os **não vencidos** que casam: a TUI marca `TREINO · não altera a
 caixa`, e a resposta vira `card.practiced` — estudar antes da hora não promove
 o cartão. `pnn cartas --tag` usa a mesma regra para listar o acervo.
 
-**Conexões (catálogo 1.4, SPEC §4.12)**, estilo Obsidian: `pnn ligar A B`
-conecta dois **nós** — cartão, deck ou tag. Um nó é o **número da última
-tela** (`pnn cartas`, `pnn decks`, `pnn tags`, `pnn conexoes`), uma **`'#tag'`**
-(entre aspas: no shell, `#` começa comentário) ou o **nome exato de um deck**;
-sem `#`, um nome que não é deck vale como tag se ela já existir (tag nova pede
-o `#`). Com mais de dois nós, o primeiro é ligado a cada um dos demais.
-`--relacao` dá nome à conexão (`prerequisito`, `exemplo`, livre); ligar de
-novo um par já ligado não grava nada (com `--relacao`, só se a relação for a
-mesma). `pnn conexoes N` numera o
-próprio nó como 1 e os vizinhos a partir de 2 (`→` sai dele, `←` chega nele,
-`↔` as duas), para `pnn desligar 1 3` sem redigitar. `pnn revisar --ao-redor
-N` estuda a vizinhança: o nó, os ligados a ele (um salto) e, para tag e deck,
-também os ligados às descendentes. Na revisão, as conexões do cartão aparecem
-**depois do verso** (`🔗 conectado a: …`) — material para elaborar, não pista
-para a resposta. `pnn cartas` mostra `🔗N` nos cartões conectados.
+**Sinapses (catálogo 1.4, SPEC §4.12; o nome vem do 1.6)**, estilo
+Obsidian: cartões e páginas são os neurônios, a **sinapse** (⚡) é a ligação
+entre eles. `pnn ligar A B` cria uma sinapse entre duas **coisas** — cartão,
+página, tarefa (do `pnn dia`) ou deck. **A tag não é ponta de sinapse: ela
+classifica.** Com uma
+`'#tag'` de um lado e um cartão ou página do outro, `pnn ligar` dá a tag ao
+item (`card.edited`/`page.edited`, como `pnn editar N --tag`) e `pnn desligar`
+a tira — "ter a tag" e "estar ligado à tag" eram quase o mesmo e só
+confundiam. Deck ↔ tag, tarefa ↔ tag e tag ↔ tag são recusados (as tags do
+deck são as da criação; tarefa não tem tags nem descrição — o contexto dela é
+uma página ligada; assuntos se relacionam por páginas), assim como `--relacao` com tag
+(para "pré-requisito de um assunto", ligue à página do assunto). Recusa não
+grava nada, nem a parte válida do comando. Sinapses com tag gravadas antes
+do 1.6 continuam valendo e se desfazem pelo `desligar`.
+
+Um nó é o **número da última tela** (`pnn cartas`, `pnn decks`, `pnn tags`,
+`pnn paginas`, `pnn pagina`, `pnn buscar`, `pnn sinapses`), uma **`'#tag'`**
+(entre aspas: no shell, `#` começa comentário), o **nome exato de um deck** ou
+o **título de uma página** (sem caixa nem acento: `pnn ligar "documentacao
+do portal" 3`); sem `#`, um nome que não é deck nem página vale como tag se
+ela já existir (tag nova pede o `#`). Com mais de dois nós, o primeiro é
+ligado a cada um dos demais. `--relacao` dá nome à sinapse (`prerequisito`,
+`exemplo`, livre); ligar de novo um par já ligado não grava nada (com
+`--relacao`, só se a relação for a mesma). `pnn sinapses N` (o antigo
+`pnn conexoes` continua valendo) numera o próprio nó como 1 e os vizinhos a
+partir de 2 (`→` sai dele, `←` chega nele, `↔` as duas), para `pnn desligar 1
+3` sem redigitar. `pnn revisar --ao-redor N` estuda a vizinhança: o nó, os
+ligados a ele (um salto) e, para tag e deck, também os ligados às
+descendentes; para página, também os cartões das tags dela. Na revisão, as
+sinapses do cartão aparecem **depois do verso** (`⚡ sinapses: …`) —
+material para elaborar, não pista para a resposta. `pnn cartas` mostra `⚡N`
+nos cartões com sinapses.
 
 **Grafo (SPEC §4.14)**: `pnn grafo` escreve o acervo em DOT — cartões ativos
-(vencidos em vermelho), decks e tags como nós; conexões (setas com a
+(vencidos em vermelho), decks e tags como nós; sinapses (setas com a
 relação), tags (tracejado), pertença a deck e hierarquia `/`/`::`
 (pontilhado) como arestas. Renderize com o Graphviz: `pnn grafo | dot -Tsvg >
 grafo.svg`. Com um nó (`pnn grafo '#so'`), sai o **grafo local** — o nó e o que
@@ -223,7 +320,7 @@ resposta` por linha; o `frame` é um campo aberto para métodos de estudo futuro
 
 | Comando | Evento(s) |
 |---|---|
-| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN]` | `session.started/ended` (v2, `reason?` no Esc) + `checkin.logged` + `pause.started/ended` (pausa verde) |
+| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN] [--relogio]` | `session.started/ended` (v2, `reason?` no Esc) + `checkin.logged` + `pause.started/ended` (pausa verde) |
 | `pnn pausa [MIN]` | `pause.started` (avulsa, cronometrada; padrão 5 min) |
 | `pnn volta` | `pause.ended` |
 | `pnn pausa --das HH:MM --ate HH:MM [--dia D]` | `pause.logged` (retroativa — "esqueci de apertar o botão") |
@@ -235,7 +332,9 @@ subiram, funde no log local (dedup por `id` + ordem total) e sobe os eventos
 que este dispositivo autorou. Configure com `PNN_S3_BUCKET` (e `PNN_S3_PREFIX`,
 `PNN_S3_ENDPOINT`, `PNN_S3_REGION`); as credenciais vêm da cadeia padrão da
 AWS, nunca de `~/.pnn`. Como cada dispositivo escreve só a própria chave no
-bucket, não há conflito a resolver nem escrita perdida — ver SPEC §5.
+bucket, não há conflito a resolver nem escrita perdida — ver SPEC §5. O
+objeto da CLI sobe comprimido com zstd (`<device>.jsonl.zst`): o log guarda o
+texto inteiro de cada versão de página, e a compressão acha as repetições.
 
 `pnn semana` é a revisão à la Safren: foco, pausas e revisões por dia, motivos
 de interrupção agregados e o contraste agendado × executado. `N` volta N
@@ -256,6 +355,76 @@ X de Y checagens". **Break** (`Ctrl+P`): escolhe a duração da pausa (5/10/15/
 "pausa"`) e entra na tela verde — a pausa é um estado próprio, não um
 parêntese dentro do foco; a tarefa "desmarca" e o novo foco é uma escolha
 nova.
+
+**Página da tarefa** (catálogo 1.6): tarefa não tem descrição — o contexto
+dela é uma **página ligada por sinapse** (`pnn dia` → `pnn ligar "docs cli"
+3`; o `pnn dia` mostra `⚡N` nas tarefas ligadas). O `pnn foco N` mostra as
+páginas ligadas sob o relógio (`⚡ página docs cli`), e **`Ctrl+E`** abre a
+página no `$EDITOR` **sem encerrar o bloco** (com várias, `[1]`..`[9]`
+escolhe; `Ctrl+E` e não `e` porque a linha de distração está sempre
+focada). O editor toma o terminal: a tela e os tiques param, e na volta o
+tempo de parede que passou é **descontado do relógio** (check-ins do meio
+não são feitos). O aviso de fim de bloco não depende da tela — toca no
+horário mesmo com o vim aberto; se o bloco acabou durante a edição, ele se
+encerra como concluído na volta e a pausa verde começa ali. O resultado da
+edição (`✔ página salva`, ou o erro com o caminho do texto preservado)
+aparece na própria tela.
+
+**Modo de escrita** (o editor do pnn): com página ligada, o `pnn foco N` abre
+**direto na página**, num editor dentro da própria tela, com o relógio numa
+barra no topo e o que está ligado à página (⚡) no rodapé — ao contrário do
+`$EDITOR`, o relógio, os check-ins e os avisos seguem vivos enquanto se
+escreve (com várias páginas, pergunta em qual; `--relogio` abre no relógio
+grande, e `Ctrl+O` entra na escrita depois). `Ctrl+S` grava (`page.edited`
+com `base`), e a página também se grava sozinha: a cada 2 min com mudança
+pendente, no fim do bloco (antes da pausa), ao sair e antes de abrir o
+`$EDITOR` — nunca por tecla, porque cada gravação é o texto inteiro. `Esc`
+volta ao relógio grande sem encerrar o bloco; `Ctrl+E` leva a página ao
+`$EDITOR` para edição pesada e a relê na volta; `Ctrl+P` é a pausa e
+`Ctrl+C` grava e encerra. O check-in aparece no rodapé e o `s`/`n` responde
+sem virar texto.
+
+**Comandos `/`** — na escrita e também no **relógio grande**: na escrita, o
+`/` abre os comandos no começo da linha ou depois de um espaço (colado a uma
+palavra é só uma barra: "e/ou", "http://"); no relógio grande, como primeiro
+caractere da linha de distração. `//` escreve a barra. Filtrados enquanto se
+digita; `Enter` executa o primeiro que casa (marcado com `▸`: `/tar` →
+`/tarefa`), `Tab` completa, sem caixa nem acento (`/distração`, `/cartão`),
+`Esc` fecha. A linha do comando não fica no texto — registrar sem trocar de
+ferramenta no meio do trabalho (o adiamento de distrações, RF06, estendido).
+
+Os comandos têm um **ponto de referência**: na escrita, a **página** aberta;
+no relógio grande, a **tarefa em foco**. Daí `/ligar` e `/cartao` ligarem à
+página ou à tarefa, e `/tag` (classificar) só valer na escrita. Com tarefa em
+foco, `/tarefa` cria uma **subtarefa** dela (`parent_id`) — a decomposição que
+a spec recomenda para "não sei por onde começar" —, e na escrita também a liga
+à página. **Sem página ligada, `Ctrl+O` abre os comandos já com
+`/pagina <título da tarefa>`**: um Enter cria a página e começa a escrever.
+Todos emitem eventos que já existem:
+
+| Comando | Na escrita (página) | No relógio grande (tarefa) | Evento(s) |
+|---|---|---|---|
+| `/pagina [Título]` | sem título, troca entre as páginas ligadas; com título, cria outra ligada à tarefa e passa a ela | cria a página ligada à tarefa (sem título: o da tarefa) e começa a escrever | `page.created` + `link.created` |
+| `/tarefa Título` | subtarefa da em foco, **ligada à página** | subtarefa da em foco | `task.created` (`parent_id`) + `link.created` |
+| `/tarefas` | lista as abertas com prioridade — a em foco, as da página (`⚡`), as do dia; o número conclui | idem | `task.completed` |
+| `/feito [texto]` | conclui (a em foco e as da página primeiro); com texto que casa uma só, direto | idem | `task.completed` |
+| `/cartao frente \| verso` | cartão solto ligado à página | cartão solto ligado à tarefa | `card.created` v2 + `link.created` |
+| `/ligar palavras` | procura páginas e cartões (como o `pnn buscar`) e liga à página | idem, liga à tarefa (página ligada entra no `Ctrl+O`) | `link.created` |
+| `/tag a b` · `/untag a` | classifica a página | — | `page.edited` (`tags`) |
+| `/distracao texto` | anota a distração sem sair do foco (no `pnn escrever`, sem sessão, vira nota da caixa de entrada) | idem (o mesmo que a linha de distração) | `distraction.captured` (ou `note.captured`) |
+| `/salvar` · `/sair` | o mesmo que `Ctrl+S` · `Esc` | — | — |
+
+O editor é o `textarea` do bubbles: atalhos no estilo emacs (`Ctrl+A`/`End`,
+`Alt+setas`), colar funciona. **`Ctrl+Z` desfaz e `Ctrl+Y` refaz** — o
+textarea não tem, então o modo de escrita guarda retratos do texto antes de
+cada grupo de edição (uma palavra, uma sequência de apagar, um Enter, uma
+colagem) e devolve também o cursor ao lugar. Ainda não há busca dentro do
+texto — para isso, o `Ctrl+E` e o vim. A página abre com o cursor no fim
+do texto, onde se continua escrevendo.
+
+**`pnn escrever N|título`**: o mesmo editor e os mesmos comandos **fora do
+foco** — sem sessão, sem relógio, sem pausa; `Esc` grava e sai, e a CLI
+imprime o resultado da última gravação.
 
 ## 4. Telas
 
@@ -302,9 +471,13 @@ o gabinete (< 38 colunas), degrada para uma linha: `▐█  23:41  █▌`.
                      ┗━━━━━━━━━━━━━━━━━━━━━━━━━ 23:41 ━━┛
                        ▀▀                            ▀▀
 
+ ⚡ página docs cli
  Distração? anote e volte ao trabalho
- Enter grava e limpa · Esc encerra · Ctrl+P pausa
+ Enter grava e limpa · Esc encerra · Ctrl+P pausa · Ctrl+E edita a página
 ```
+
+A linha `⚡` e a dica do `Ctrl+E` só aparecem quando a tarefa tem página
+ligada.
 
 ### Pausa — VERDE
 
@@ -327,7 +500,17 @@ o gabinete (< 38 colunas), degrada para uma linha: `▐█  23:41  █▌`.
  a pausa é parte do bloco — descanse até o despertador
 
  Nesta sessão: 2 distrações anotadas → triar depois
- [Enter] novo foco · [t] triagem · [q] sair
+ [Enter] voltar a "Escrever seção 4.6" (25 min) · [t] triagem · [q] sair
+```
+
+Quando a pausa toca:
+
+```
+⏰ fim da pausa · 🐘 bora de novo?
+
+ Nesta sessão: 2 distrações anotadas → triar depois
+
+ [Enter] voltar a "Escrever seção 4.6" (25 min) · [t] triagem · [q] sair
 ```
 
 ## 5. Easter egg: `procrastina`

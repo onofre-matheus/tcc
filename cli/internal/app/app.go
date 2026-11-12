@@ -21,6 +21,10 @@ type App struct {
 	Now   func() time.Time
 	Out   io.Writer
 	Color bool
+	// Editor abre o arquivo no editor do usuário e espera ele fechar
+	// (páginas, catálogo 1.6). nil = $PNN_EDITOR/$VISUAL/$EDITOR de verdade;
+	// os testes trocam por uma função que reescreve o arquivo.
+	Editor func(path string) error
 }
 
 func New() (*App, error) {

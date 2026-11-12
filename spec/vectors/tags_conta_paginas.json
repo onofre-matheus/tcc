@@ -1,0 +1,35 @@
+{
+  "name": "tags contam as páginas (1.6): pages = páginas não arquivadas com a tag exata; tag que só existe em página aparece; página arquivada não conta; tags de página acompanham tag.renamed",
+  "projection": "tags",
+  "now": "2026-07-02T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "f1", "back": "b1", "tags": ["so"] } },
+    { "id": "evt-03", "type": "page.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "page_id": "p1", "title": "Threads", "body": "", "tags": ["so", "Kubernetes"] } },
+    { "id": "evt-04", "type": "page.created", "v": 1, "lc": 4, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "page_id": "p2", "title": "Velha", "body": "", "tags": ["kubernetes"] } },
+    { "id": "evt-05", "type": "page.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "page_id": "p3", "title": "Só página", "body": "", "tags": ["leituras"] } },
+    { "id": "evt-06", "type": "page.created", "v": 1, "lc": 6, "ts": "2026-07-01T10:04:00Z", "device": "dev-a",
+      "payload": { "page_id": "p4", "title": "Sumida", "body": "", "tags": ["sumida"] } },
+    { "id": "evt-07", "type": "page.archived", "v": 1, "lc": 7, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "page_id": "p2" } },
+    { "id": "evt-08", "type": "page.archived", "v": 1, "lc": 8, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "page_id": "p4" } },
+    { "id": "evt-09", "type": "tag.renamed", "v": 1, "lc": 9, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "from": "leituras", "to": "livros" } }
+  ],
+  "expected": {
+    "tags": {
+      "so": { "cards": 1, "due": 1, "pages": 1 },
+      "kubernetes": { "cards": 0, "due": 0, "pages": 1 },
+      "livros": { "cards": 0, "due": 0, "pages": 1 }
+    },
+    "names": ["kubernetes", "livros", "so"]
+  }
+}

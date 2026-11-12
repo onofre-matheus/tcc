@@ -442,7 +442,7 @@ func (m Revisar) View() string {
 		b.WriteString(" " + dim.Render("fonte: ") + hyperlink(*card.SourceURL, label) + "\n")
 	}
 	if len(card.Links) > 0 {
-		b.WriteString(" " + dim.Render("🔗 conectado a: ") + strings.Join(card.Links, dim.Render(" · ")) + "\n")
+		b.WriteString(" " + dim.Render("⚡ sinapses: ") + strings.Join(card.Links, dim.Render(" · ")) + "\n")
 	}
 	if card.LastExplanation != nil && *card.LastExplanation != "" {
 		label := "Sua explicação anterior"

@@ -86,8 +86,10 @@ export function s3Bucket(config, { fetchImpl = fetch } = {}) {
       return objects;
     },
 
+    // Bytes, não texto: o objeto pode vir comprimido com zstd (.jsonl.zst da
+    // CLI) — quem decide como ler é o sync, pelo número mágico.
     async get(key) {
-      return (await send("GET", `${base}/${key}`)).text();
+      return new Uint8Array(await (await send("GET", `${base}/${key}`)).arrayBuffer());
     },
 
     async put(key, body) {

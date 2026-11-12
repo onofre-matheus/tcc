@@ -43,6 +43,13 @@ func (c *countdown) tick() bool {
 	return c.remaining == 0
 }
 
+// advance desconta n segundos de uma vez — o tempo que a tela ficou parada
+// com o editor aberto; devolve true quando o timer chega a zero.
+func (c *countdown) advance(n int) bool {
+	c.remaining = max(0, c.remaining-n)
+	return c.remaining == 0
+}
+
 func (c countdown) clock() string {
 	return fmt.Sprintf("%02d:%02d", c.remaining/60, c.remaining%60)
 }

@@ -23,6 +23,7 @@ const notifyGrace = 3 * time.Second
 
 func newFocoCmd(a *app.App) *cobra.Command {
 	var minutes, pause, checkin int
+	var relogio bool
 	cmd := &cobra.Command{
 		Use:   "foco [N]",
 		Short: "inicia uma sessão de foco (modo VERMELHO)",
@@ -37,10 +38,14 @@ func newFocoCmd(a *app.App) *cobra.Command {
 			}
 
 			var taskID, title string
+			var pages []tui.LinkedPage
 			if len(args) == 1 {
 				var err error
 				taskID, title, err = resolveTask(a, args[0])
 				if err != nil {
+					return err
+				}
+				if pages, err = taskPages(a, taskID); err != nil {
 					return err
 				}
 			}
@@ -54,6 +59,10 @@ func newFocoCmd(a *app.App) *cobra.Command {
 				CheckinEvery: checkin,
 				Emit:         emitTo(a),
 				EmitV:        emitVTo(a),
+				Pages:        pages,
+				EditPage:     focusEditPage(a),
+				Write:        writeActions{a},
+				StartWriting: !relogio,
 			})
 			final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
 			notify.Flush(notifyGrace) // o aviso de fim de pausa sai junto com a saída
@@ -78,6 +87,7 @@ func newFocoCmd(a *app.App) *cobra.Command {
 	cmd.Flags().IntVarP(&minutes, "minutos", "m", 0, "duração em minutos (padrão: janela de atenção)")
 	cmd.Flags().IntVar(&pause, "pausa", 5, "minutos de pausa após concluir o bloco")
 	cmd.Flags().IntVar(&checkin, "checkin", 0, "pergunta \"na tarefa?\" a cada N minutos (0 = sem)")
+	cmd.Flags().BoolVar(&relogio, "relogio", false, "abre no relógio grande mesmo com página ligada (Ctrl+O escreve depois)")
 	return cmd
 }
 
@@ -105,5 +115,44 @@ func emitVTo(a *app.App) func(string, int, map[string]any) error {
 	return func(eventType string, v int, payload map[string]any) error {
 		_, err := a.Store.AppendV(eventType, v, payload)
 		return err
+	}
+}
+
+// taskPages: as páginas (não arquivadas) ligadas à tarefa por sinapse — o
+// contexto da tarefa, que a tela de foco mostra e deixa editar (Ctrl+E).
+func taskPages(a *app.App, taskID string) ([]tui.LinkedPage, error) {
+	g, err := loadGraph(a)
+	if err != nil {
+		return nil, err
+	}
+	var pages []tui.LinkedPage
+	for _, key := range g.links.Neighbors[core.Node{Kind: core.NodeTask, ID: taskID}.Key()] {
+		node, ok := core.ParseNode(key)
+		if !ok || node.Kind != core.NodePage {
+			continue
+		}
+		if page, ok := g.pages.Pages[node.ID]; ok && !page.Archived {
+			pages = append(pages, tui.LinkedPage{ID: node.ID, Title: page.Title})
+		}
+	}
+	return pages, nil
+}
+
+// focusEditPage edita a página de dentro do foco: o resultado vira a linha de
+// status da tela, em vez de ser impresso por cima dela.
+func focusEditPage(a *app.App) func(id string) (string, error) {
+	return func(id string) (string, error) {
+		edit, err := editPageBody(a, id)
+		if err != nil {
+			return "", err
+		}
+		status := edit.status
+		if edit.empty {
+			status += " (ficou vazia — a versão anterior continua no log)"
+		}
+		for _, w := range edit.warnings {
+			status = "⚠ " + w + " · " + status
+		}
+		return status, nil
 	}
 }

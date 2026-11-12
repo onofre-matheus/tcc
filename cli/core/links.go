@@ -1,7 +1,8 @@
 // Conexões explícitas (spec/SPEC.md §3 "Conexões e renomeação de tag" e
 // §4.12): o [[link]] do Obsidian como evento. Uma conexão liga dois nós —
-// cartão, deck ou tag — e a vizinhança é não direcionada. O id da tag é o
-// próprio nome normalizado, então ligar a uma tag não exige que ela "exista".
+// cartão, deck, tag, página ou tarefa (1.6) — e a vizinhança é não
+// direcionada. O id da tag é o próprio nome normalizado, então ligar a uma
+// tag não exige que ela "exista".
 package core
 
 import (
@@ -15,6 +16,8 @@ const (
 	NodeCard = "card"
 	NodeDeck = "deck"
 	NodeTag  = "tag"
+	NodePage = "page" // catálogo 1.6
+	NodeTask = "task" // catálogo 1.6
 )
 
 type Node struct {
@@ -26,12 +29,13 @@ type Node struct {
 func (n Node) Key() string { return n.Kind + ":" + n.ID }
 
 // Clean normaliza o id de tag e diz se o nó é bem-formado (kind conhecido,
-// id não vazio). Existência de cartão/deck é checada por quem tem o estado.
+// id não vazio). Existência de cartão/deck/página é checada por quem tem o
+// estado.
 func (n Node) Clean() (Node, bool) {
 	switch n.Kind {
 	case NodeTag:
 		n.ID = NormalizeTag(n.ID)
-	case NodeCard, NodeDeck:
+	case NodeCard, NodeDeck, NodePage, NodeTask:
 		n.ID = strings.TrimSpace(n.ID)
 	default:
 		return n, false
@@ -68,7 +72,7 @@ func init() {
 
 func Links(events []Event) (LinksState, error) {
 	type edge struct{ from, to Node }
-	cards, decks := map[string]bool{}, map[string]bool{}
+	cards, decks, pages, tasks := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	edges := map[string]*edge{}
 	relations := map[string]*string{}
 	removed := map[string]bool{}
@@ -93,6 +97,42 @@ func Links(events []Event) (LinksState, error) {
 			}
 			decks[pl.DeckID] = true
 
+		case "page.created":
+			// a mesma validação da projeção de páginas (§3, Páginas): sem
+			// título, a página não existe e não se conecta
+			pl, err := decodePayload[struct {
+				PageID string `json:"page_id"`
+				Title  string `json:"title"`
+			}](event)
+			if err != nil {
+				return LinksState{}, err
+			}
+			if pl.PageID != "" && strings.TrimSpace(pl.Title) != "" {
+				pages[pl.PageID] = true
+			}
+
+		case "task.created":
+			pl, err := decodePayload[struct {
+				TaskID string `json:"task_id"`
+			}](event)
+			if err != nil {
+				return LinksState{}, err
+			}
+			if pl.TaskID != "" {
+				tasks[pl.TaskID] = true
+			}
+
+		case "task.deleted":
+			// apagar é tombstone: a tarefa sai do estado, e as sinapses dela
+			// junto (ao contrário de arquivar cartão, deck ou página)
+			pl, err := decodePayload[struct {
+				TaskID string `json:"task_id"`
+			}](event)
+			if err != nil {
+				return LinksState{}, err
+			}
+			delete(tasks, pl.TaskID)
+
 		case "link.created":
 			pl, err := decodePayload[struct {
 				LinkID   string `json:"link_id"`
@@ -112,6 +152,10 @@ func Links(events []Event) (LinksState, error) {
 					return cards[n.ID]
 				case NodeDeck:
 					return decks[n.ID]
+				case NodePage:
+					return pages[n.ID]
+				case NodeTask:
+					return tasks[n.ID]
 				}
 				return true // tag sempre existe
 			}
@@ -159,6 +203,9 @@ func Links(events []Event) (LinksState, error) {
 	for id, e := range edges {
 		if e.from == e.to {
 			continue // virou laço por renomeação: deixa de valer
+		}
+		if (e.from.Kind == NodeTask && !tasks[e.from.ID]) || (e.to.Kind == NodeTask && !tasks[e.to.ID]) {
+			continue // a tarefa foi apagada depois da sinapse
 		}
 		from, to := e.from.Key(), e.to.Key()
 		state.Links[id] = Link{From: from, To: to, Relation: relations[id]}

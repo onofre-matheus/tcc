@@ -13,7 +13,7 @@ let review = null; // { queue, practiceFrom, index, cards, decks, deckId, reveal
 let selectedDeck = null; // deck do formulário de cartão: null = ainda não escolhido; "" = (sem deck)
 let dayTasks = { tasks: {}, day_list: [] }; // para o seletor de tarefa do foco
 // Último retrato do acervo (refresh): nomeia os nós do grafo de conexões.
-let graph = { cards: {}, decks: {}, links: { links: {}, neighbors: {}, nodes: [] } };
+let graph = { cards: {}, decks: {}, pages: {}, tasks: {}, links: { links: {}, neighbors: {}, nodes: [] } };
 const nodeByLabel = new Map(); // rótulo da sugestão → "kind:id"
 
 // Check-in de atenção (self-monitoring, Safren): o alarme dispara no service
@@ -355,12 +355,19 @@ $("reveal").onclick = async () => {
 // ---------- Conexões (catálogo 1.4, estilo Obsidian) ----------
 const truncate = (s, max) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join("")}…` : String(s));
 
-// Rótulo humano do nó: frente do cartão, "deck Nome" ou "#tag".
+// Rótulo humano do nó: frente do cartão, "deck Nome", "#tag", "página
+// Título" ou "tarefa Título" (páginas e tarefas como ponta de sinapse,
+// catálogo 1.6; as ligações com elas são feitas na CLI).
 function nodeLabel(key) {
   const n = store.parseNode(key);
   if (!n) return key;
   if (n.kind === "card") return graph.cards[n.id] ? `“${truncate(graph.cards[n.id].front ?? "", 50)}”` : key;
   if (n.kind === "deck") return `deck ${graph.decks[n.id]?.name ?? n.id}`;
+  if (n.kind === "page") return graph.pages[n.id] ? `página ${truncate(graph.pages[n.id].title, 50)}` : key;
+  if (n.kind === "task") {
+    const task = graph.tasks[n.id];
+    return task ? `tarefa ${truncate(task.title, 50)}${task.done ? " ✔" : ""}` : key;
+  }
   return `#${n.id}`;
 }
 
@@ -388,7 +395,7 @@ async function renderCardLinks() {
   const items = pairs.map((nb, i) => {
     const rel = nb.relations.length ? ` <span class="meta">(${esc(nb.relations.join(", "))})</span>` : "";
     return `<div class="link-item"><span class="grow">${nb.arrow} ${esc(nodeLabel(nb.key))}${rel}</span>
-      <button type="button" class="btn ghost sm" data-unlink="${i}" title="Desfazer a conexão">✕</button></div>`;
+      <button type="button" class="btn ghost sm" data-unlink="${i}" title="Desfazer a sinapse">✕</button></div>`;
   });
   const list = $("cardLinkList");
   list.innerHTML = items.join("") || '<div class="meta">nenhuma — conecte a um cartão, deck ou #tag abaixo</div>';
@@ -419,6 +426,19 @@ $("linkBtn").onclick = async () => {
     return;
   }
   const relation = $("linkRelation").value.trim();
+  const target = store.parseNode(y);
+  // Tag classifica, não é ponta de sinapse (1.6): ligar a uma #tag acrescenta
+  // a tag ao cartão.
+  if (target.kind === "tag") {
+    if (relation) {
+      msg.textContent = "Relação é de sinapse; tag classifica — tire a relação para dar a tag ao cartão.";
+      return;
+    }
+    const added = await store.tagCard(store.parseNode(x).id, target.id);
+    $("linkTarget").value = "";
+    msg.textContent = added ? `🏷 tag adicionada: #${target.id}` : `O cartão já tem #${target.id}.`;
+    return;
+  }
   const already = neighborhood(graph.links, x).find((nb) => nb.key === y);
   if (y === x) {
     msg.textContent = "Um cartão não se liga a si mesmo.";
@@ -426,13 +446,13 @@ $("linkBtn").onclick = async () => {
   }
   // Redundante: sem relação, o par já ligado; com relação, a mesma relação.
   if (already && (!relation || already.relations.includes(relation))) {
-    msg.textContent = `Já ligado a ${nodeLabel(y)}.`;
+    msg.textContent = `Já há sinapse com ${nodeLabel(y)}.`;
     return;
   }
-  await store.linkNodes(store.parseNode(x), store.parseNode(y), relation);
+  await store.linkNodes(store.parseNode(x), target, relation);
   $("linkTarget").value = "";
   $("linkRelation").value = "";
-  msg.textContent = `🔗 ligado a ${nodeLabel(y)}`;
+  msg.textContent = `⚡ sinapse com ${nodeLabel(y)}`;
   await renderCardLinks();
 };
 async function grade(result) {
@@ -682,7 +702,7 @@ function renderTags(tg, lk) {
     const { cards, due } = tg.tags[t];
     const dueLabel = due ? ` · <span class="due">${plural(due, "vencido", "vencidos")}</span>` : "";
     const degree = lk.neighbors[`tag:${t}`]?.length;
-    const linkLabel = degree ? ` · 🔗${degree}` : "";
+    const linkLabel = degree ? ` · ⚡${degree}` : "";
     return `<button type="button" class="btn ghost sm chip" data-tag="${esc(t)}" title="Clique: filtra a revisão por #${esc(t)} · botão direito: renomeia">#${esc(t)} · ${cards}${dueLabel}${linkLabel}</button>`;
   });
   $("tagChips").innerHTML = chips.length ? `<span class="meta">Tags:</span> ${chips.join("")}` : "";
@@ -706,8 +726,8 @@ function renderTags(tg, lk) {
 
 // Sugestões de nó (cartões ativos, decks ativos, tags) para "conectar a…" e
 // o seletor "ao redor de" da revisão, com os nós que têm conexão.
-function renderGraph(lt, dk, tg, lk) {
-  graph = { cards: lt.cards, decks: dk.decks, links: lk };
+function renderGraph(lt, dk, tg, lk, pg, tk) {
+  graph = { cards: lt.cards, decks: dk.decks, pages: pg.pages, tasks: tk.tasks, links: lk };
   nodeByLabel.clear();
   for (const [id, c] of Object.entries(lt.cards)) {
     if (!c.archived && !(c.deck_id && dk.decks[c.deck_id]?.archived)) nodeByLabel.set(`cartão: ${c.front}`, `card:${id}`);
@@ -719,7 +739,7 @@ function renderGraph(lt, dk, tg, lk) {
   const sel = $("reviewAround");
   const prev = sel.value;
   sel.innerHTML = '<option value="">ao redor de: — (qualquer)</option>' +
-    lk.nodes.map((k) => `<option value="${esc(k).replace(/"/g, "&quot;")}">ao redor de: ${esc(nodeLabel(k))} · 🔗${lk.neighbors[k].length}</option>`).join("");
+    lk.nodes.map((k) => `<option value="${esc(k).replace(/"/g, "&quot;")}">ao redor de: ${esc(nodeLabel(k))} · ⚡${lk.neighbors[k].length}</option>`).join("");
   setAround(prev);
 }
 
@@ -886,10 +906,10 @@ function renderFocusTasks(t) {
 
 // ---------- Refresh geral ----------
 async function refresh() {
-  const [s, inb, dk, lt, tk, mins, tg, lk, st] = await Promise.all([
+  const [s, inb, dk, lt, tk, mins, tg, lk, st, pg] = await Promise.all([
     store.state.stats(), store.state.inbox(), store.state.decks(),
     store.state.leitner(), store.state.tasks(), store.state.attentionMinutes(),
-    store.state.tags(), store.state.links(), store.state.studies(),
+    store.state.tags(), store.state.links(), store.state.studies(), store.state.pages(),
   ]);
   lastInbox = inb;
   const flame = s.streak > 0 ? "🔥" : "•";
@@ -900,7 +920,7 @@ async function refresh() {
   renderInbox(inb);
   renderDecks(dk, lt);
   renderTags(tg, lk);
-  renderGraph(lt, dk, tg, lk);
+  renderGraph(lt, dk, tg, lk, pg, tk);
   renderStudies(st);
   await renderWeek();
   await updateReviewButton();

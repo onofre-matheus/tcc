@@ -9,6 +9,7 @@ import { project as leitner } from "./leitner.js";
 import { project as decksProjection } from "./decks.js";
 import { project as linksProjection, parseNode } from "./links.js";
 import { normalizeTags, effectiveTags, tagUnder, activeCard } from "./tags.js";
+import { project as pagesProjection } from "./pages.js";
 
 // O deck id está na subárvore "::" do deck root; deck inexistente, em nada.
 function deckUnder(decks, id, root) {
@@ -77,7 +78,7 @@ const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export function project(events, { now, tz, decks: deckFilter, tags: tagFilter, around } = {}) {
   const lt = leitner(events, { now, tz });
   const { decks } = decksProjection(events);
-  const filter = { decks: deckFilter ?? [], tags: tagFilter ?? [], around: around ?? [] };
+  const filter = { decks: deckFilter ?? [], tags: tagFilter ?? [], around: expandPageAround(events, around ?? []) };
   const match = matcher(decks, filter, linksProjection(events));
 
   const due = new Set(lt.queue);
@@ -98,4 +99,17 @@ export function project(events, { now, tz, decks: deckFilter, tags: tagFilter, a
     });
 
   return { queue, practice };
+}
+
+// Ao redor de uma página (1.6) é a vizinhança dela mais a vizinhança de cada
+// tag dela (§4.11) — a tag é como a página diz sobre o que é.
+function expandPageAround(events, around) {
+  if (!around.some((key) => parseNode(key)?.kind === "page")) return around;
+  const { pages } = pagesProjection(events);
+  const out = [...around];
+  for (const key of around) {
+    const node = parseNode(key);
+    if (node?.kind === "page") for (const tag of pages[node.id]?.tags ?? []) out.push(`tag:${tag}`);
+  }
+  return out;
 }

@@ -157,7 +157,11 @@ func Study(events []Event, p Params) (StudyState, error) {
 	if err != nil {
 		return StudyState{}, err
 	}
-	match := StudyMatcher(decks, links, p.Study)
+	filter, err := expandPageAround(events, p.Study)
+	if err != nil {
+		return StudyState{}, err
+	}
+	match := StudyMatcher(decks, links, filter)
 
 	state := StudyState{Queue: []string{}, Practice: []string{}}
 	due := make(map[string]bool, len(leitner.Queue))
@@ -200,4 +204,32 @@ func Study(events []Event, p Params) (StudyState, error) {
 		)
 	})
 	return state, nil
+}
+
+// expandPageAround: ao redor de uma página (1.6) é a vizinhança dela mais a
+// vizinhança de cada tag dela (§4.11) — a tag é como a página diz sobre o que
+// é. Cada nó de página no around ganha os nós das suas tags; o resto do
+// filtro fica como veio.
+func expandPageAround(events []Event, f StudyFilter) (StudyFilter, error) {
+	hasPage := slices.ContainsFunc(f.Around, func(key string) bool {
+		n, ok := ParseNode(key)
+		return ok && n.Kind == NodePage
+	})
+	if !hasPage {
+		return f, nil
+	}
+	pages, err := Pages(events)
+	if err != nil {
+		return f, err
+	}
+	around := slices.Clone(f.Around)
+	for _, key := range f.Around {
+		if n, ok := ParseNode(key); ok && n.Kind == NodePage {
+			for _, tag := range pages.Pages[n.ID].Tags {
+				around = append(around, Node{Kind: NodeTag, ID: tag}.Key())
+			}
+		}
+	}
+	f.Around = around
+	return f, nil
 }

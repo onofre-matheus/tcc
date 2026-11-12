@@ -102,6 +102,7 @@ func activeCard(card LeitnerCard, decks DecksState) bool {
 type TagInfo struct {
 	Cards int `json:"cards"` // cartões ativos com a tag exata entre as efetivas
 	Due   int `json:"due"`   // quantos desses estão na fila Leitner
+	Pages int `json:"pages"` // páginas não arquivadas com a tag exata (1.6)
 }
 
 type TagsState struct {
@@ -123,6 +124,10 @@ func Tags(events []Event, p Params) (TagsState, error) {
 		return TagsState{}, err
 	}
 	decks, err := Decks(events)
+	if err != nil {
+		return TagsState{}, err
+	}
+	pages, err := Pages(events)
 	if err != nil {
 		return TagsState{}, err
 	}
@@ -150,6 +155,16 @@ func Tags(events []Event, p Params) (TagsState, error) {
 			if due[id] {
 				info.Due++
 			}
+			state.Tags[tag] = info
+		}
+	}
+	for _, page := range pages.Pages {
+		if page.Archived {
+			continue
+		}
+		for _, tag := range page.Tags {
+			info := state.Tags[tag]
+			info.Pages++
 			state.Tags[tag] = info
 		}
 	}

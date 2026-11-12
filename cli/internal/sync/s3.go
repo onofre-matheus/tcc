@@ -140,10 +140,20 @@ func (b *s3Bucket) Put(ctx context.Context, key string, body []byte) (string, er
 		Bucket:      aws.String(b.bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(body),
-		ContentType: aws.String("application/x-ndjson"),
+		ContentType: aws.String(contentType(key)),
 	})
 	if err != nil {
 		return "", err
 	}
 	return aws.ToString(out.ETag), nil
+}
+
+// contentType do objeto pelo nome: o .jsonl.zst é zstd (sem Content-Encoding,
+// para nenhum cliente HTTP descomprimir por conta própria — quem lê decide
+// pelo número mágico).
+func contentType(key string) string {
+	if strings.HasSuffix(key, zstdSuffix) {
+		return "application/zstd"
+	}
+	return "application/x-ndjson"
 }

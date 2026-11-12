@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import { EventLog } from "../storage/log.js";
 import { memoryKV } from "../storage/kv.js";
-import { sync, parseLog, encodeLog } from "../storage/sync.js";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { sync, parseLog, encodeLog, decodeObject } from "../storage/sync.js";
 import { parseList } from "../storage/s3.js";
 import { loadSyncConfig, SyncNotConfigured, CONFIG_KEY } from "../storage/sync_config.js";
 
@@ -142,6 +145,36 @@ describe("sync por bucket", () => {
     // pode nascer "antes" do que veio da CLI (SPEC §1).
     const proximo = await extensao.append("task.created", { task_id: "t2" });
     expect(proximo.lc).toBe(8);
+  });
+
+  // O objeto de referência (spec/sync) foi comprimido pelo mesmo encoder que a
+  // CLI usa; o teste do lado Go lê o mesmo arquivo.
+  it("lê o .jsonl.zst da CLI, reconhecendo o zstd pelo conteúdo", async () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "spec", "sync");
+    const zst = new Uint8Array(readFileSync(join(dir, "objeto_cli.jsonl.zst")));
+    const plain = readFileSync(join(dir, "objeto_cli.jsonl"), "utf8");
+    expect(decodeObject(zst)).toBe(plain);
+    expect(decodeObject(new TextEncoder().encode(plain))).toBe(plain);
+
+    const bucket = fakeBucket();
+    bucket.objects.set("pnn/dev-cli-go.jsonl.zst", zst);
+    bucket.objects.set("pnn/outra-coisa.txt", "não é log");
+    const extensao = device();
+    expect((await sync(extensao, bucket, "pnn/")).received).toBe(3);
+    const page = (await extensao.events()).find((e) => e.type === "page.created");
+    expect(page.payload.body).toContain("acentuação: ação, missão");
+  });
+
+  it("zstd cortado é pulado sem derrubar o sync", async () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "spec", "sync");
+    const zst = new Uint8Array(readFileSync(join(dir, "objeto_cli.jsonl.zst")));
+    const bucket = fakeBucket();
+    bucket.objects.set("pnn/dev-cli-go.jsonl.zst", zst.slice(0, 100));
+    bucket.objects.set(
+      "pnn/dev-outro.jsonl",
+      '{"id":"o1","type":"task.created","v":1,"lc":1,"ts":"2026-07-27T22:00:00.000Z","device":"dev-outro","payload":{"task_id":"t"}}\n',
+    );
+    expect((await sync(device(), bucket, "pnn/")).received).toBe(1);
   });
 
   it("escreve JSONL que o outro lado consegue ler de volta", () => {

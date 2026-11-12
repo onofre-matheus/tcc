@@ -9,7 +9,7 @@
   </head>
   <body>
     <!-- Grafo do acervo (spec §4.14), estilo Obsidian: cartões, tags e decks;
-         conexões explícitas, tags, pertença a deck e hierarquia. -->
+         sinapses (conexões explícitas), tags, pertença a deck e hierarquia. -->
     <header class="graph-bar">
       <strong>🕸 Grafo do acervo</strong>
       <label><input type="checkbox" id="show-card" checked /> cartões</label>
@@ -30,9 +30,9 @@
         <div class="meta" id="infoKind"></div>
         <div id="infoLinks"></div>
         <div class="meta" id="infoOther"></div>
-        <input id="linkRelation" placeholder="relação da próxima conexão (opcional)" aria-label="Relação" />
+        <input id="linkRelation" placeholder="relação da próxima sinapse (opcional)" aria-label="Relação" />
         <div class="row">
-          <button type="button" class="btn sm" id="linkMode">🔗 ligar a…</button>
+          <button type="button" class="btn sm" id="linkMode">⚡ ligar a…</button>
           <button type="button" class="btn primary sm" id="studyAround">📚 estudar ao redor</button>
         </div>
         <div class="meta" id="infoMsg"></div>
@@ -41,7 +41,7 @@
     <footer class="meta legend">
       <span class="dot card"></span> cartão <span class="dot due"></span> vencido
       <span class="dot tag"></span> tag <span class="dot deck"></span> deck ·
-      ── conexão · ┄ tag · ⋯ deck e hierarquia · clique: detalhes · arraste: move · roda: zoom
+      ── sinapse · ┄ tag · ⋯ deck e hierarquia · clique: detalhes · arraste: move · roda: zoom
     </footer>
     <datalist id="graphNodes"></datalist>
     <script type="module" src="graph.js"></script>

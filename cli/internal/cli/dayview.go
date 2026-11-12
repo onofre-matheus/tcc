@@ -21,6 +21,7 @@ type taskRow struct {
 	depth    int
 	hasChild bool
 	task     core.Task
+	synapses int // sinapses da tarefa (páginas de contexto, cartões), catálogo 1.6
 }
 
 type dayView struct {
@@ -61,6 +62,13 @@ func buildDayView(a *app.App) (*dayView, error) {
 	}
 
 	view.rows = taskTree(view.tasks)
+	links, err := core.Links(events)
+	if err != nil {
+		return nil, err
+	}
+	for i := range view.rows {
+		view.rows[i].synapses = len(links.Neighbors[core.NodeTask+":"+view.rows[i].id])
+	}
 
 	refs := make([]app.ViewRef, len(view.rows))
 	for i, row := range view.rows {
@@ -173,7 +181,11 @@ func (r taskRow) line(th ui.Theme) string {
 	if r.depth > 0 {
 		indent = strings.Repeat(" ", r.depth) + th.Dim("↳") + " "
 	}
-	return fmt.Sprintf(" %d %s %s%s", r.num, th.Badge(priorityLabel(r.task)), indent, r.task.Title)
+	line := fmt.Sprintf(" %d %s %s%s", r.num, th.Badge(priorityLabel(r.task)), indent, r.task.Title)
+	if r.synapses > 0 {
+		line += "  " + th.Dim(fmt.Sprintf("⚡%d", r.synapses))
+	}
+	return line
 }
 
 // sortedAppointmentIDs ordena os compromissos por (início, id), como o

@@ -15,6 +15,7 @@ import { project as study } from "../core/study.js";
 import { project as links } from "../core/links.js";
 import { project as studies } from "../core/studies.js";
 import { project as graph } from "../core/graph.js";
+import { project as pages } from "../core/pages.js";
 
 const vectorsDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -54,6 +55,8 @@ function runProjection(vector, events) {
       return studies(events);
     case "graph":
       return graph(events, { now: vector.now, tz: vector.tz });
+    case "pages":
+      return pages(events);
     default:
       throw new Error(`projeção desconhecida: ${vector.projection}`);
   }

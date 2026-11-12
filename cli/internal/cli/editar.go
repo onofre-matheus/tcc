@@ -50,7 +50,7 @@ func newEditarCmd(a *app.App) *cobra.Command {
 	var tags tagEdit
 	cmd := &cobra.Command{
 		Use:   `editar N ["novo texto"]`,
-		Short: "edita o item N da última tela (task.edited, deck.renamed, card.edited, tag.renamed, study.saved)",
+		Short: "edita o item N da última tela (task.edited, deck.renamed, card.edited, tag.renamed, study.saved, page.edited)",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(c *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
@@ -64,10 +64,18 @@ func newEditarCmd(a *app.App) *cobra.Command {
 			if c.Flags().Changed("tags") {
 				tags.replace = &tagsFlag
 			}
-			if ref.Kind != "card" && tags.any() {
-				return fmt.Errorf("--tags/--tag/--untag valem para cartões (deck tem tags fixas na criação)")
+			if ref.Kind != "card" && ref.Kind != core.NodePage && tags.any() {
+				return fmt.Errorf("--tags/--tag/--untag valem para cartões e páginas (deck tem tags fixas na criação)")
 			}
 			switch ref.Kind {
+			case core.NodePage:
+				if frente != "" || verso != "" || data != "" {
+					return fmt.Errorf("página se edita no editor (`pnn editar %s`), pelo título (`pnn editar %s \"novo título\"`) ou pelas tags (--tag/--untag/--tags)", args[0], args[0])
+				}
+				if text == "" && !tags.any() {
+					return editPage(a, ref.ID)
+				}
+				return editarPaginaCampos(a, ref.ID, text, tags)
 			case "task":
 				if frente != "" || verso != "" {
 					return fmt.Errorf("--frente/--verso valem para cartões; tarefa se edita com `pnn editar N \"novo título\"` e/ou --data")
@@ -103,9 +111,9 @@ func newEditarCmd(a *app.App) *cobra.Command {
 	cmd.Flags().StringVar(&data, "data", "", "novo prazo AAAA-MM-DD (tarefa)")
 	cmd.Flags().StringVar(&frente, "frente", "", "nova frente (cartão)")
 	cmd.Flags().StringVar(&verso, "verso", "", "novo verso (cartão)")
-	cmd.Flags().StringVar(&tagsFlag, "tags", "", `substitui as tags do cartão ("so prova-p2"; "" limpa)`)
-	cmd.Flags().StringSliceVar(&tags.add, "tag", nil, "acrescenta tag ao cartão (repetível)")
-	cmd.Flags().StringSliceVar(&tags.untag, "untag", nil, "remove tag do cartão (repetível)")
+	cmd.Flags().StringVar(&tagsFlag, "tags", "", `substitui as tags do cartão ou da página ("so prova-p2"; "" limpa)`)
+	cmd.Flags().StringSliceVar(&tags.add, "tag", nil, "acrescenta tag ao cartão ou à página (repetível)")
+	cmd.Flags().StringSliceVar(&tags.untag, "untag", nil, "remove tag do cartão ou da página (repetível)")
 	return cmd
 }
 
@@ -147,6 +155,9 @@ func newApagarCmd(a *app.App) *cobra.Command {
 			if ref.Kind == core.NodeTag {
 				return fmt.Errorf("tag não se apaga — renomeie com `pnn editar %s \"novo-nome\"` ou tire dos cartões com `pnn editar N --untag`", args[0])
 			}
+			if ref.Kind == core.NodePage {
+				return fmt.Errorf("página não se apaga (o texto fica no log) — arquive com `pnn arquivar %s`", args[0])
+			}
 			return fmt.Errorf("decks e cartões não se apagam (o histórico de estudo fica) — arquive com `pnn arquivar %s`", args[0])
 		},
 	}
@@ -155,7 +166,7 @@ func newApagarCmd(a *app.App) *cobra.Command {
 func newArquivarCmd(a *app.App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "arquivar N",
-		Short: "arquiva o cartão ou deck N da última tela (fora da fila, história preservada)",
+		Short: "arquiva o cartão, deck ou página N da última tela (fora da fila/lista, história preservada)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
@@ -182,6 +193,16 @@ func newArquivarCmd(a *app.App) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(a.Out, "✔ cartão arquivado: %s\n", card.Front)
+				return nil
+			case core.NodePage:
+				page, err := pageByRef(a, ref.ID)
+				if err != nil {
+					return err
+				}
+				if _, err := a.Store.Append("page.archived", map[string]any{"page_id": ref.ID}); err != nil {
+					return err
+				}
+				fmt.Fprintf(a.Out, "✔ página arquivada: %s (fora da lista, texto preservado — `pnn paginas --arquivadas`)\n", page.Title)
 				return nil
 			case "task":
 				return fmt.Errorf("tarefa não se arquiva — conclua com `pnn feito %s` ou apague com `pnn apagar %s`", args[0], args[0])
@@ -282,8 +303,8 @@ func editarCartao(a *app.App, id, frente, verso string, tags tagEdit) error {
 }
 
 // renomearTag emite tag.renamed (catálogo 1.4): vale para as ocorrências já
-// gravadas da tag e das descendentes (`so/x` → `novo/x`), em cartões, decks e
-// conexões; renomear para uma tag existente funde as duas.
+// gravadas da tag e das descendentes (`so/x` → `novo/x`), em cartões,
+// páginas, decks e sinapses; renomear para uma tag existente funde as duas.
 func renomearTag(a *app.App, from, raw string) error {
 	to := core.NormalizeTag(raw)
 	if to == "" {
@@ -301,10 +322,15 @@ func renomearTag(a *app.App, from, raw string) error {
 		return slices.ContainsFunc(tags, func(t string) bool { return core.TagUnder(t, from) })
 	}
 	var parts []string
-	cards, decks, links := 0, 0, 0
+	cards, pages, decks, links := 0, 0, 0, 0
 	for _, card := range g.leitner.Cards {
 		if under(card.Tags) {
 			cards++
+		}
+	}
+	for _, page := range g.pages.Pages {
+		if under(page.Tags) {
+			pages++
 		}
 	}
 	for _, deck := range g.decks.Decks {
@@ -323,7 +349,7 @@ func renomearTag(a *app.App, from, raw string) error {
 	for _, c := range []struct {
 		n         int
 		one, many string
-	}{{cards, "cartão", "cartões"}, {decks, "deck", "decks"}, {links, "conexão", "conexões"}} {
+	}{{cards, "cartão", "cartões"}, {pages, "página", "páginas"}, {decks, "deck", "decks"}, {links, "sinapse", "sinapses"}} {
 		if c.n > 0 {
 			parts = append(parts, plural(c.n, c.one, c.many))
 		}

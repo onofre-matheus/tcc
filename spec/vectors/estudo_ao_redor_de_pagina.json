@@ -1,0 +1,28 @@
+{
+  "name": "around de uma página (1.6): a vizinhança dela (o cartão ligado, os cartões da tag ligada) mais a vizinhança de cada tag dela (os cartões da tag da página e das descendentes); o que não toca a página fica de fora",
+  "projection": "study",
+  "now": "2026-07-01T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "params": { "around": ["page:p1"] },
+  "events": [
+    { "id": "evt-01", "type": "card.created", "v": 2, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "ligado à página", "back": "b1", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 2, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "pela tag ligada", "back": "b2", "tags": ["k8s/pods"] } },
+    { "id": "evt-03", "type": "card.created", "v": 2, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "card_id": "c3", "front": "pela tag da página", "back": "b3", "tags": ["redes/osi"] } },
+    { "id": "evt-04", "type": "card.created", "v": 2, "lc": 4, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "card_id": "c4", "front": "fora", "back": "b4", "tags": ["outra"] } },
+    { "id": "evt-05", "type": "page.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:04:00Z", "device": "dev-a",
+      "payload": { "page_id": "p1", "title": "Portal", "body": "", "tags": ["redes"] } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "page", "id": "p1" }, "to": { "kind": "card", "id": "c1" } } },
+    { "id": "evt-07", "type": "link.created", "v": 1, "lc": 7, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "tag", "id": "k8s" }, "to": { "kind": "page", "id": "p1" } } }
+  ],
+  "expected": {
+    "queue": ["c1", "c2", "c3"],
+    "practice": []
+  }
+}

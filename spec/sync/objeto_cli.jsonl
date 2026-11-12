@@ -1,0 +1,3 @@
+{"id":"0197c9a4-0001","type":"task.created","v":1,"lc":7,"ts":"2026-07-27T23:31:00.000Z","device":"dev-cli-go","payload":{"task_id":"t1","title":"Terminar a documentação"}}
+{"id":"0197c9a4-0002","type":"page.created","v":1,"lc":8,"ts":"2026-07-27T23:32:00.000Z","device":"dev-cli-go","payload":{"page_id":"p1","title":"docs cli","body":"# Portal\n\nChecklist da alpha release, com acentuação: ação, missão.","tags":["trabalho"]}}
+{"id":"0197c9a4-0003","type":"page.edited","v":1,"lc":9,"ts":"2026-07-27T23:40:00.000Z","device":"dev-cli-go","payload":{"page_id":"p1","body":"# Portal\n\nChecklist da alpha release, com acentuação: ação, missão.\n\n- [ ] console","base":"0197c9a4-0002"}}

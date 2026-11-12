@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 //
-// Conexões e renomeação de tag no side panel (catálogo 1.4): a fiação da tela
-// até o log — "ao redor de" filtra a revisão pela vizinhança, as conexões do
-// cartão aparecem depois do verso (ligar a #tag nova, a outro cartão,
-// desligar) e o botão direito no chip renomeia a tag (tag.renamed).
+// Sinapses e renomeação de tag no side panel (catálogo 1.4; "sinapse" desde o
+// 1.6): a fiação da tela até o log — "ao redor de" filtra a revisão pela
+// vizinhança, as sinapses do cartão aparecem depois do verso (ligar a outro
+// cartão, desligar; ligar a uma #tag classifica o cartão) e o botão direito no
+// chip renomeia a tag (tag.renamed). A sinapse l0 com #redes é de antes do
+// 1.6: continua valendo e se desfaz pela tela.
 
 import { describe, expect, it } from "vitest";
 import { $, ago, ev, mountSidepanel, settle } from "./sidepanel-env.js";
@@ -19,8 +21,8 @@ const { store, lastOf } = await mountSidepanel([
 const linkItems = () => [...$("cardLinkList").querySelectorAll(".link-item")];
 
 describe("side panel: conexões e renomeação de tag", () => {
-  it("chip mostra as conexões da tag; o seletor 'ao redor de' lista os nós conectados", () => {
-    expect($("tagChips").textContent).toContain("#redes · 1 · 1 vencido · 🔗1");
+  it("chip mostra as sinapses da tag; o seletor 'ao redor de' lista os nós ligados", () => {
+    expect($("tagChips").textContent).toContain("#redes · 1 · 1 vencido · ⚡1");
     const around = [...$("reviewAround").options].map((o) => o.value);
     expect(around).toEqual(["", "card:c1", "tag:redes"]);
   });
@@ -32,7 +34,7 @@ describe("side panel: conexões e renomeação de tag", () => {
     expect($("startReview").textContent).toBe("Revisar flashcards (2) · filtrado");
   });
 
-  it("as conexões aparecem depois do verso; ligar a #tag nova e a cartão; desligar", async () => {
+  it("as sinapses aparecem depois do verso; #tag classifica, cartão vira sinapse; desligar", async () => {
     $("startReview").click();
     await settle();
     expect($("cardFace").textContent).toBe("processo?");
@@ -43,26 +45,34 @@ describe("side panel: conexões e renomeação de tag", () => {
     expect($("cardLinks").hidden).toBe(false);
     expect(linkItems().map((el) => el.textContent.replace(/\s+/g, " ").trim())).toEqual(["→ #redes ✕"]);
 
+    // relação é de sinapse: com uma #tag, recusa sem gravar
     $("linkTarget").value = "#SO/Threads";
     $("linkRelation").value = "prerequisito";
     $("linkBtn").click();
     await settle();
-    expect((await lastOf("link.created")).payload).toMatchObject({
-      from: { kind: "card", id: "c1" }, to: { kind: "tag", id: "so/threads" }, relation: "prerequisito",
-    });
+    expect($("linkMsg").textContent).toContain("tire a relação");
+    expect((await lastOf("card.edited"))).toBeUndefined();
+
+    // sem relação, a #tag classifica o cartão (as próprias + a nova), sem sinapse
+    $("linkRelation").value = "";
+    $("linkBtn").click();
+    await settle();
+    expect((await lastOf("card.edited")).payload).toEqual({ card_id: "c1", tags: ["so", "so/threads"] });
+    expect($("linkMsg").textContent).toBe("🏷 tag adicionada: #so/threads");
 
     $("linkTarget").value = "cartão: OSI?";
     $("linkBtn").click();
     await settle();
     expect((await lastOf("link.created")).payload).toMatchObject({ to: { kind: "card", id: "c3" } });
     expect((await lastOf("link.created")).payload).not.toHaveProperty("relation");
+    expect($("linkMsg").textContent).toBe("⚡ sinapse com “OSI?”");
     const texts = linkItems().map((el) => el.textContent.replace(/\s+/g, " ").trim());
-    expect(texts).toEqual(["→ “OSI?” ✕", "→ #redes ✕", "→ #so/threads (prerequisito) ✕"]);
+    expect(texts).toEqual(["→ “OSI?” ✕", "→ #redes ✕"]);
 
     linkItems()[1].querySelector("[data-unlink]").click();
     await settle();
     expect((await lastOf("link.removed")).payload).toEqual({ link_id: "l0" });
-    expect(linkItems()).toHaveLength(2);
+    expect(linkItems()).toHaveLength(1);
 
     $("linkTarget").value = "sem cerquilha";
     $("linkBtn").click();
@@ -77,7 +87,8 @@ describe("side panel: conexões e renomeação de tag", () => {
     await settle();
     expect((await lastOf("tag.renamed")).payload).toEqual({ from: "so", to: "sistemas" });
     expect($("tagChips").textContent).toContain("#sistemas/threads");
-    expect((await store.state.links()).neighbors["card:c1"]).toEqual(["card:c3", "tag:sistemas/threads"]);
+    expect((await store.state.links()).neighbors["card:c1"]).toEqual(["card:c3"]);
+    expect((await store.state.leitner()).cards.c1.tags).toEqual(["sistemas", "sistemas/threads"]);
 
     window.prompt = () => null; // encerra a sessão sem motivo
     $("endFocus").click();

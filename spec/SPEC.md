@@ -43,14 +43,15 @@ estado projetado (**convergência**), e eventos duplicados não alteram o
 resultado (**idempotência**). Vetores com `"permutations": true` verificam isso
 embaralhando a entrada.
 
-## 3. Catálogo de eventos (v1.5)
+## 3. Catálogo de eventos (v1.6)
 
 O catálogo 1.1 acrescentou ao 1.0 os eventos de **edição e arquivamento**; o
 1.2, **pausas e o motivo de interrupção** (marcados ▸ nas tabelas;
 `session.ended` ganhou v2 de payload); o 1.3 acrescenta **tags livres, cartão
 sem deck e treino fora do vencimento** (marcados "(1.3)"; `card.created`
 ganhou v2 de payload); o 1.4, **conexões explícitas e renomeação de tag**
-(marcados "(1.4)"); o 1.5, **sessões de estudo salvas** (marcados "(1.5)").
+(marcados "(1.4)"); o 1.5, **sessões de estudo salvas** (marcados "(1.5)");
+o 1.6, **páginas** — anotações longas de consulta (marcados "(1.6)").
 As adições são compatíveis —
 clientes antigos continuam válidos: **tipos de evento desconhecidos são
 ignorados pelas projeções**, sem interromper o processamento (vetor
@@ -147,12 +148,14 @@ começa com `t + "/"` (`so` inclui `so/concorrencia`, não `sobre`).
 | `link.removed` (1.4) | `link_id` |
 | `tag.renamed` (1.4) | `from, to` |
 
-**Conexão** é uma aresta explícita entre dois **nós**, criada pelo usuário — o
+**Conexão** — nas interfaces, **sinapse** (⚡), desde o 1.6: cartões e páginas
+são os neurônios, a sinapse é a ligação entre eles — é uma aresta explícita
+entre dois **nós**, criada pelo usuário — o
 `[[link]]` do Obsidian como evento: o texto do cartão não é varrido em busca
-de links. Nó = `{kind, id}` com `kind ∈ card | deck | tag`; o `id` da tag é o
-nome normalizado (é por isso que a tag não tem `tag_id`). Na saída das
-projeções o nó vira a chave `"kind:id"` (`card:c1`, `deck:d1`,
-`tag:so/threads`).
+de links. Nó = `{kind, id}` com `kind ∈ card | deck | tag | page | task`
+(`page` e `task` desde o 1.6); o `id` da tag é o nome normalizado (é por isso
+que a tag não tem `tag_id`). Na saída das projeções o nó vira a chave
+`"kind:id"` (`card:c1`, `deck:d1`, `tag:so/threads`, `page:p1`, `task:t1`).
 
 - A aresta guarda a direção (`from → to`) porque `relation` pode ser
   direcional (`prerequisito`: *from* é pré-requisito de *to*); a vizinhança é
@@ -160,15 +163,38 @@ projeções o nó vira a chave `"kind:id"` (`card:c1`, `deck:d1`,
   `card.explained`; ausente = conexão simples.
 - `link.created` é **ignorado** se algum nó for inválido: `kind` desconhecido
   (um tipo de nó novo entra como `kind` novo, e clientes antigos o ignoram),
-  `id` vazio (inclusive tag que normaliza para vazia), cartão ou deck
-  inexistente naquela posição da ordem total (§3: referência a id
-  inexistente); tag sempre existe. Laço (`from` = `to`) também é ignorado.
+  `id` vazio (inclusive tag que normaliza para vazia), cartão, deck, página
+  ou tarefa inexistente naquela posição da ordem total (§3: referência a id
+  inexistente); tag sempre existe. A página existe a partir de um
+  `page.created` válido (§3, Páginas: com título; o primeiro vence); a
+  tarefa, do `task.created` até o `task.deleted`. Laço (`from` = `to`)
+  também é ignorado.
 - `link.removed` é **tombstone** da conexão. Duas conexões do mesmo par
   (criadas em dispositivos diferentes) são arestas distintas — remover uma não
   remove a outra, então a superfície, ao "desligar" dois nós, remove todas as
   do par.
-- Arquivar cartão ou deck não remove conexões (a história fica); quem exibe
-  decide se mostra.
+- Arquivar cartão, deck ou página não remove conexões (a história fica);
+  quem exibe decide se mostra. Concluir tarefa também não. **Apagar tarefa**
+  é tombstone (§3, Organização): a tarefa sai do estado e as conexões dela
+  saem junto.
+- **Tarefa (1.6)**: tarefa não tem descrição (§3, Organização) — o contexto
+  dela é uma página ligada por sinapse, que a sessão de foco mostra e deixa
+  editar.
+- **Página (1.6)**: tags e conexões de página são metadado, criados por
+  evento como os dos cartões — o corpo nunca é varrido. A página é o lugar
+  onde o usuário **vê** o que está ligado a ela, não onde escreve as
+  ligações.
+- **Tag classifica; sinapse liga coisas (1.6).** "Ter a tag" (o campo
+  `tags`) e "estar ligado à tag" (conexão com ponta `tag`) significavam quase
+  o mesmo para quem usa. A partir do 1.6, as **superfícies não criam conexão
+  com ponta `tag`**: ligar um cartão ou uma página a uma tag **classifica** o
+  item (`card.edited`/`page.edited` com a tag acrescentada às próprias), e
+  desligar tira a tag. Deck ↔ tag e tag ↔ tag são recusados — as tags do
+  deck são as da criação, e assuntos se relacionam por páginas: o assunto que
+  reúne coisas (ou que é "pré-requisito" de algo) é uma página, ligada por
+  sinapses. As conexões com ponta `tag` já gravadas **continuam válidas** e
+  as projeções as leem como sempre (o log é imutável; os vetores do 1.4
+  seguem iguais).
 
 **Renomear tag** (`tag.renamed`): sem `tag_id`, renomear é um evento próprio.
 Vale **na posição do evento na ordem total**: toda ocorrência anterior de
@@ -204,6 +230,39 @@ padrão.
 - As tags do filtro e os nós de tag do `around` **acompanham `tag.renamed`**,
   como as demais tags — senão a sessão "Véspera da P2" esvaziaria em silêncio
   ao renomear `#p2`.
+
+### Páginas (1.6)
+
+| Tipo | Payload |
+|---|---|
+| `page.created` (1.6) | `page_id, title, body, tags[]` |
+| `page.edited` (1.6) | `page_id, title?, body?, tags[]?, pinned?, base?` |
+| `page.archived` (1.6) | `page_id` |
+
+**Página** é texto longo de consulta e de uso constante — a anotação que
+fica, ao contrário da `note.captured`, que é passagem para a triagem, e do
+cartão, que é estudo. O corpo é markdown e **nenhuma projeção o interpreta**
+(não procura links, tarefas nem cartões no texto): ler o markdown é papel da
+superfície.
+
+- `title` é aparado. `page.created` com título vazio é ignorado; no
+  `page.edited`, título vazio deixa o anterior. `body` é guardado como veio
+  (ausente no `page.created` ≡ `""`).
+- `page.created` para um `page_id` que já existe é ignorado — vale o
+  primeiro na ordem total.
+- **Edição é LWW por campo** (§3), como no `card.edited`. `tags[]` substitui
+  a lista inteira, com a normalização das tags livres, e acompanha
+  `tag.renamed` como as tags dos cartões.
+- `pinned` fixa a página no topo da lista — o acesso de uso constante.
+  Ausente = sem mudança. Fixar não conta como edição (§4.15, `updated_at`).
+- **`base`**: a edição que traz `body` diz em qual versão do corpo se
+  baseou — o `id` do evento (`page.created`, ou `page.edited` com `body`) que
+  o cliente leu antes de editar. No 1.6 o corpo ainda é LWW (vence a última
+  edição na ordem total) e nenhuma projeção lê `base`; o campo é gravado
+  desde já para que a detecção de conflito — duas edições com a mesma
+  `base` — valha também para o histórico. Ausente = base desconhecida.
+- `page.archived` tira a página da lista preservando o texto
+  (`archived: true`), como o cartão; edições posteriores continuam valendo.
 
 ### Captura e triagem
 
@@ -438,17 +497,20 @@ Saída: `{ pending: [ { appointment_id, offset_minutes, label } … ] }`.
 ### 4.10 Tags (`projection: "tags"`)
 
 - Universo: cartões **ativos** — não arquivados e de deck não arquivado
-  (cartão sem deck nunca está em deck arquivado).
-- Uma tag aparece se estiver entre as tags efetivas de algum cartão ativo ou
-  nas tags de algum deck não arquivado (zerada, se nenhum cartão a tiver).
+  (cartão sem deck nunca está em deck arquivado) — e páginas não arquivadas
+  (1.6).
+- Uma tag aparece se estiver entre as tags efetivas de algum cartão ativo,
+  nas tags de algum deck não arquivado (zerada, se nenhum cartão a tiver) ou
+  nas tags de alguma página não arquivada.
 - `cards` = cartões ativos com a tag **exata** entre as efetivas; `due` =
-  quantos desses estão na fila Leitner (§4.1).
+  quantos desses estão na fila Leitner (§4.1); `pages` (1.6) = páginas não
+  arquivadas com a tag exata.
 - `names` = as tags em ordem canônica (comparação por unidade de código, não
   dependente de locale). A soma pela hierarquia (`so` reunindo `so/…`) é feita
   só na exibição, como a dos decks — e sem contar duas vezes o cartão que tem
   as duas tags.
 
-Saída: `{ tags: { <tag>: { cards, due } }, names: [tag…] }`.
+Saída: `{ tags: { <tag>: { cards, due, pages } }, names: [tag…] }`.
 
 ### 4.11 Sessão personalizada (`projection: "study"`)
 
@@ -466,7 +528,11 @@ Recebe, além de `now`/`tz`, o filtro `decks?: [deck_id]`, `tags?: [tag]` e
   `/`; o próprio deck e a subárvore `::`. O cartão casa se algum nó da
   vizinhança o incluir (cartão: ele mesmo; tag: alguma tag efetiva; deck: o
   deck do cartão na subárvore). Um salto só — vizinho de vizinho não entra.
-  O `id` de tag é normalizado; nó inválido não casa nada.
+  O `id` de tag é normalizado; nó inválido não casa nada. **Página (1.6)**: a
+  vizinhança dela **mais a vizinhança de cada tag dela** (como se o filtro
+  trouxesse também `tag:<t>` para cada tag da página) — a tag é como a página
+  diz sobre o que é, então estudar ao redor da página reúne os cartões
+  ligados a ela e os dos assuntos dela.
 - **Combinação**: OU dentro de cada lista, **E entre** as listas; lista vazia
   (ou ausente) não restringe.
 - `queue` = a fila Leitner (§4.1) filtrada, **na mesma ordem**.
@@ -512,6 +578,9 @@ extensão em SVG, a CLI em DOT). Recebe `now`/`tz` (marca os vencidos).
   - tags: as próprias dos cartões ativos, as dos decks não arquivados e as
     pontas de conexão (§4.12), **mais os ancestrais implícitos** (`so` de
     `so/threads`); `label` = nome.
+  - páginas e tarefas (1.6) **ainda não são nós**: conexão com elas fica
+    fora do grafo, inclusive a tag que só aparece como a outra ponta dela
+    (que ficaria solta no desenho).
   - `due` é `false` fora dos cartões.
 - **Arestas** `{ from, to, kind, relation }`, só entre nós do grafo:
   - `link` — cada conexão (§4.12), na direção gravada, com a `relation`;
@@ -528,6 +597,23 @@ extensão em SVG, a CLI em DOT). Recebe `now`/`tz` (marca os vencidos).
 Saída: `{ nodes: [ { id, kind, label, due } … ], edges: [ { from, to, kind,
 relation } … ] }`.
 
+### 4.15 Páginas (`projection: "pages"`)
+
+- `pages` = toda página criada (§3, Páginas), **inclusive arquivada**, com:
+  - `title`, `body`, `tags` (normalizadas e renomeadas), `pinned` (`false`
+    se nunca fixada) e `archived`;
+  - `version` = o `id` do último evento que gravou o corpo (`page.created`
+    ou `page.edited` com `body`) — é o que o cliente envia como `base`;
+  - `created_at` = `ts` do `page.created`;
+  - `updated_at` = `ts` do último evento, na ordem total, que trouxe título
+    (não vazio), corpo ou tags. Fixar e arquivar não mudam `updated_at`.
+- `order` = as páginas **não arquivadas**: fixadas primeiro; dentro de cada
+  grupo, `updated_at` decrescente; empate por `page_id` crescente (unidade de
+  código).
+
+Saída: `{ pages: { <page_id>: { title, body, tags, pinned, archived,
+version, created_at, updated_at } }, order: [page_id…] }`.
+
 ## 5. Sincronização
 
 O desenho original previa um servidor com uma única operação `POST /sync`
@@ -538,8 +624,35 @@ manter — o bucket continua sem ler `payload` e sem regra de negócio nenhuma.
 Layout:
 
 ```
-<prefixo>/<device>.jsonl   — um objeto por dispositivo
+<prefixo>/<device>.jsonl.zst   — um objeto por dispositivo, JSONL comprimido com zstd
+<prefixo>/<device>.jsonl       — o mesmo, sem compressão (clientes que não comprimem; objetos de antes)
 ```
+
+**Compressão (2026-11).** O log guarda o **texto inteiro** de cada versão de
+página (§3, Páginas), e cada sync reenvia o objeto inteiro do dispositivo. Em
+vez de gravar só a diferença entre versões — o que mudaria o modelo de
+eventos, exigiria reaplicar cadeias de patches e tornaria cada versão
+dependente das anteriores —, o objeto sobe comprimido com **zstd** (RFC 8878),
+cuja janela de megabytes acha a versão anterior da mesma página: é o que o git
+faz, gravando o arquivo inteiro e deixando a compressão (os *packfiles*)
+achar as repetições. Medido num log simulado de 12.150 eventos (150 páginas ×
+20 edições): texto inteiro, 18 MB brutos → 0,77 MB com zstd; só as diferenças,
+4,2 MB → 0,72 MB. O gzip, com janela de 32 KB, fica em 6,1 MB.
+
+- **Quem lê reconhece o formato pelo conteúdo** — o número mágico do zstd
+  (`28 B5 2F FD`) —, não pelo nome; ambos os sufixos valem. Comprimir é
+  opcional para quem escreve (a extensão sobe `.jsonl`; a CLI, `.jsonl.zst`);
+  ler os dois é obrigatório.
+- **Migração sem coordenação**: um dispositivo que passa a comprimir sobe o
+  `.jsonl.zst` no primeiro sync, mesmo sem evento novo; o `.jsonl` antigo fica
+  congelado (a política abaixo não permite apagar) e quem baixa os dois não
+  duplica nada — o dedup por `id` absorve, como em qualquer reenvio.
+- O objeto vai com `Content-Type: application/zstd` e **sem**
+  `Content-Encoding`, para nenhum cliente HTTP descomprimir por conta própria.
+- Frame zstd ilegível ou truncado não derruba o sync, como a linha JSONL
+  corrompida: o que se consegue ler entra, o resto é pulado.
+- A compressão é só do transporte: o log local continua JSONL puro (legível
+  com `grep`/`jq`), e o modelo de eventos e os vetores não mudam.
 
 **Cada dispositivo grava somente o próprio objeto.** É essa regra que dispensa
 servidor: como dois clientes nunca escrevem a mesma chave, não existe escrita

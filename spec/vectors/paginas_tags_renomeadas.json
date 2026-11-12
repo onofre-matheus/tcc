@@ -1,0 +1,27 @@
+{
+  "name": "tags de página seguem a normalização e o tag.renamed na posição do evento (descendentes junto; renomear para tag existente funde); página criada depois reusa o nome antigo",
+  "projection": "pages",
+  "now": "2026-07-02T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "page.created", "v": 1, "lc": 1, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "page_id": "p1", "title": "Threads", "body": "", "tags": ["so/threads", "Redes"] } },
+    { "id": "evt-02", "type": "page.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "page_id": "p2", "title": "Prova", "body": "", "tags": ["#SO ", "Prova P2", "so"] } },
+    { "id": "evt-03", "type": "tag.renamed", "v": 1, "lc": 3, "ts": "2026-07-01T10:02:00Z", "device": "dev-a",
+      "payload": { "from": "so", "to": "sistemas" } },
+    { "id": "evt-04", "type": "tag.renamed", "v": 1, "lc": 4, "ts": "2026-07-01T10:03:00Z", "device": "dev-a",
+      "payload": { "from": "redes", "to": "sistemas/threads" } },
+    { "id": "evt-05", "type": "page.created", "v": 1, "lc": 5, "ts": "2026-07-01T10:04:00Z", "device": "dev-a",
+      "payload": { "page_id": "p3", "title": "Nova", "body": "", "tags": ["so"] } }
+  ],
+  "expected": {
+    "pages": {
+      "p1": { "tags": ["sistemas/threads"], "updated_at": "2026-07-01T10:00:00Z" },
+      "p2": { "tags": ["sistemas", "prova-p2"] },
+      "p3": { "tags": ["so"] }
+    },
+    "order": ["p3", "p2", "p1"]
+  }
+}

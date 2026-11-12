@@ -1,0 +1,34 @@
+{
+  "name": "conexão com página (1.6) ainda não entra no grafo: nem a aresta, nem a tag que só aparece como a outra ponta dela; as demais conexões seguem iguais",
+  "projection": "graph",
+  "now": "2026-07-02T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "deck.created", "v": 1, "lc": 1, "ts": "2026-07-01T09:00:00Z", "device": "dev-a",
+      "payload": { "deck_id": "d1", "name": "SO", "tags": [] } },
+    { "id": "evt-02", "type": "card.created", "v": 1, "lc": 2, "ts": "2026-07-01T10:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "deck_id": "d1", "front": "Processo?", "back": "programa em execução", "tags": ["so"] } },
+    { "id": "evt-03", "type": "page.created", "v": 1, "lc": 3, "ts": "2026-07-01T10:01:00Z", "device": "dev-a",
+      "payload": { "page_id": "p1", "title": "Portal", "body": "", "tags": [] } },
+    { "id": "evt-04", "type": "link.created", "v": 1, "lc": 4, "ts": "2026-07-01T11:00:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "page", "id": "p1" }, "to": { "kind": "card", "id": "c1" } } },
+    { "id": "evt-05", "type": "link.created", "v": 1, "lc": 5, "ts": "2026-07-01T11:01:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "page", "id": "p1" }, "to": { "kind": "tag", "id": "solta" } } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-07-01T11:02:00Z", "device": "dev-a",
+      "payload": { "link_id": "l3", "from": { "kind": "card", "id": "c1" }, "to": { "kind": "tag", "id": "redes" } } }
+  ],
+  "expected": {
+    "nodes": [
+      { "id": "card:c1", "kind": "card", "label": "Processo?", "due": true },
+      { "id": "deck:d1", "kind": "deck", "label": "SO", "due": false },
+      { "id": "tag:redes", "kind": "tag", "label": "redes", "due": false },
+      { "id": "tag:so", "kind": "tag", "label": "so", "due": false }
+    ],
+    "edges": [
+      { "from": "card:c1", "to": "deck:d1", "kind": "deck", "relation": null },
+      { "from": "card:c1", "to": "tag:redes", "kind": "link", "relation": null },
+      { "from": "card:c1", "to": "tag:so", "kind": "tag", "relation": null }
+    ]
+  }
+}
