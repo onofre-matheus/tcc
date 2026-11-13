@@ -32,13 +32,17 @@ export async function sync(log, bucket, prefix) {
   // o que permite restaurar o log inteiro num perfil novo.
   const incoming = [];
   const etags = {};
+  const key = `${prefix}${device}.jsonl`;
+  let ownRemote = 0; // eventos meus no meu objeto, se ele foi baixado agora
   for (const object of objects) {
     if (!isLogKey(object.key)) continue; // o bucket pode ter outra coisa
     if (object.etag && cursor.etags[object.key] === object.etag) {
       etags[object.key] = object.etag;
       continue;
     }
-    incoming.push(...parseLog(decodeObject(await bucket.get(object.key))));
+    const events = parseLog(decodeObject(await bucket.get(object.key)));
+    if (object.key === key) ownRemote = events.filter((e) => e.device === device).length;
+    incoming.push(...events);
     etags[object.key] = object.etag;
   }
 
@@ -48,9 +52,13 @@ export async function sync(log, bucket, prefix) {
   const mine = (await log.events()).filter((event) => event.device === device);
   let sent = Math.max(mine.length - cursor.pushed, 0);
 
+  // O objeto é sobrescrito inteiro: com menos eventos, perderia os que só
+  // estão nele. Não acontece com a fusão acima — é a última guarda.
+  if (mine.length < ownRemote) {
+    throw new Error(`o objeto deste navegador no bucket tem ${ownRemote} eventos e o log só ${mine.length} — não sobrescrevo`);
+  }
   // Sobe quando há evento novo meu — ou quando meu objeto sumiu do bucket
   // (apagado à mão), caso em que o cursor mente ao dizer que já foi enviado.
-  const key = `${prefix}${device}.jsonl`;
   if (mine.length > 0 && (sent > 0 || !(key in etags))) {
     etags[key] = await bucket.put(key, encodeLog(mine));
     cursor.pushed = mine.length;
@@ -60,6 +68,30 @@ export async function sync(log, bucket, prefix) {
 
   await log.setCursor({ etags, pushed: cursor.pushed });
   return { sent, received };
+}
+
+/**
+ * Confere que o objeto deste dispositivo no bucket tem todos os eventos que
+ * ele emitiu — a condição para "Sair deste dispositivo" apagar o log (SPEC
+ * §5, Login e logout). Lança se faltar algum; devolve quantos conferiu.
+ */
+export async function verifyOwnObject(log, bucket, prefix) {
+  const device = await log.deviceId();
+  const mine = (await log.events()).filter((event) => event.device === device);
+  if (!mine.length) return 0;
+  const remote = new Set(parseLog(decodeObject(await bucket.get(`${prefix}${device}.jsonl`))).map((e) => e.id));
+  const missing = mine.filter((event) => !remote.has(event.id)).length;
+  if (missing) throw new Error(`${missing} de ${mine.length} eventos deste navegador não estão no bucket`);
+  return mine.length;
+}
+
+/**
+ * A identidade do bucket para a trava réplica ↔ bucket — a mesma forma da
+ * CLI (sync.Config.Remote): endpoint, bucket e prefixo, normalizados.
+ */
+export function remoteOf({ endpoint = "", bucket, prefix = "pnn/" }) {
+  const host = String(endpoint).trim().replace(/\/+$/, "").toLowerCase().replace(/^https?:\/\//, "") || "aws";
+  return `s3://${host}/${bucket}/${prefix}`;
 }
 
 // O cursor é otimização, nunca fonte de verdade: perdido ou errado, o pior que

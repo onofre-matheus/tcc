@@ -41,9 +41,9 @@ func TestTaskPagesEFocusEditPage(t *testing.T) {
 	}
 	appendOrFail(t, a, "page.archived", map[string]any{"page_id": "p2"})
 
-	pages, err := taskPages(a, "t1")
-	if err != nil || len(pages) != 1 || pages[0].ID != "p1" || pages[0].Title != "docs cli" {
-		t.Fatalf("só a página ativa ligada à tarefa: %v %v", pages, err)
+	pages, books, err := taskLinked(a, "t1")
+	if err != nil || len(pages) != 1 || pages[0].ID != "p1" || pages[0].Title != "docs cli" || len(books) != 0 {
+		t.Fatalf("só a página ativa ligada à tarefa: %v %v %v", pages, books, err)
 	}
 
 	a.Editor = func(path string) error { return os.WriteFile(path, []byte("v2\n"), 0o600) }

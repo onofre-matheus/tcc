@@ -84,9 +84,12 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 	}
 
 	// ▼ Baixa o que mudou desde a última vez (inclusive o próprio objeto: é o
-	// que permite restaurar a réplica inteira numa instalação nova).
+	// que permite restaurar a réplica inteira numa instalação nova — e o que
+	// o login faz, com o mesmo dispositivo de antes do logout).
 	var incoming []core.Event
 	etags := map[string]string{}
+	key := prefix + device + zstdSuffix
+	ownRemote := 0 // eventos meus no meu objeto, se ele foi baixado agora
 	for _, obj := range objects {
 		if !isLogKey(obj.Key) {
 			continue // o bucket pode ser compartilhado com outra coisa
@@ -99,7 +102,11 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 		if err != nil {
 			return Result{}, fmt.Errorf("baixar %s: %w", obj.Key, err)
 		}
-		incoming = append(incoming, parseLog(decodeObject(body))...)
+		events := parseLog(decodeObject(body))
+		if obj.Key == key {
+			ownRemote = len(filterDevice(events, device))
+		}
+		incoming = append(incoming, events...)
 		etags[obj.Key] = obj.ETag
 	}
 
@@ -125,8 +132,12 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 	// É também o que migra quem vinha do .jsonl: o .zst ainda não existe, então
 	// sobe no primeiro sync; o .jsonl antigo fica congelado (a política não
 	// deixa apagar) e o dedup por id absorve a repetição.
-	key := prefix + device + zstdSuffix
 	_, inBucket := etags[key]
+	if len(mine) < ownRemote {
+		// O objeto é sobrescrito inteiro: com menos eventos, perderia os que
+		// só estão nele. Não acontece com a fusão acima — é a última guarda.
+		return Result{}, fmt.Errorf("o objeto deste dispositivo no bucket tem %d eventos e a réplica só %d — não sobrescrevo", ownRemote, len(mine))
+	}
 	if len(mine) > 0 && (result.Sent > 0 || !inBucket) {
 		body, err := encodeObject(mine)
 		if err != nil {
@@ -142,6 +153,42 @@ func Run(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (Res
 
 	saveCursor(s, cursor{ETags: etags, Pushed: cur.Pushed})
 	return result, nil
+}
+
+// VerifyOwn confere que o objeto deste dispositivo no bucket tem todos os
+// eventos que ele emitiu — a condição para o logout apagar a réplica (SPEC
+// §5, Login e logout). Devolve quantos conferiu.
+func VerifyOwn(ctx context.Context, s *store.Store, bucket Bucket, prefix string) (int, error) {
+	device, err := s.DeviceID()
+	if err != nil {
+		return 0, err
+	}
+	local, err := s.Events()
+	if err != nil {
+		return 0, err
+	}
+	mine := filterDevice(local, device)
+	if len(mine) == 0 {
+		return 0, nil
+	}
+	body, err := bucket.Get(ctx, prefix+device+zstdSuffix)
+	if err != nil {
+		return 0, fmt.Errorf("reler o objeto deste dispositivo: %w", err)
+	}
+	remote := map[string]bool{}
+	for _, e := range parseLog(decodeObject(body)) {
+		remote[e.ID] = true
+	}
+	missing := 0
+	for _, e := range mine {
+		if !remote[e.ID] {
+			missing++
+		}
+	}
+	if missing > 0 {
+		return 0, fmt.Errorf("%d de %d eventos deste dispositivo não estão no bucket", missing, len(mine))
+	}
+	return len(mine), nil
 }
 
 // loadCursor lê o cursor gravado. Com o log local vazio ele é descartado: o

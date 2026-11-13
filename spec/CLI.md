@@ -223,6 +223,105 @@ Anotação longa e de uso constante — o que não é passagem (nota) nem estudo
 - **Ainda não**: páginas no `pnn grafo` (a sinapse com página fica fora do
   desenho, SPEC §4.14).
 
+### Livros (catálogo 1.7)
+
+Ler e anotar no terminal. O livro é um **EPUB** sem DRM; cadastra-se uma vez
+— na CLI ou na extensão — e o pnn guarda o arquivo: no log vão a identidade
+do livro (título, autor, formato, sha256 do arquivo), as anotações e o "onde
+parei" (SPEC §3, Livros); o EPUB fica em `~/.pnn/livros/` e viaja **cifrado**
+pelo bucket no `pnn sync` (SPEC §5, Livros no bucket).
+
+| Comando | Evento(s) |
+|---|---|
+| `pnn livro arquivo.epub [--titulo T] [--autor A]` | `book.registered` e a cópia em `~/.pnn/livros/` (o mesmo arquivo, pelo sha256, só guarda a cópia que faltar) |
+| `pnn livros [--arquivados] [--json]` | — (numerada: progresso, anotações, "⚠ ainda não baixado") |
+| `pnn livros procurar pasta [--cadastrar]` | — (guarda de novo, pelo sha256, os que faltam aqui; `--cadastrar` → `book.registered` dos novos) |
+| `pnn sync` | também leva e traz os EPUBs, cifrados com `PNN_LIVROS_SENHA` (`▲ 📖`/`▼ 📖`) |
+| `pnn ler N\|título` | o modo de leitura (abaixo) → `annotation.*`, `book.progressed` |
+| `pnn anotacoes N\|título` | — (em ordem de leitura, por capítulo; numerada para `editar`/`apagar`) |
+| `pnn editar N "Título"` · `pnn arquivar N` (livro) | `book.edited` · `book.archived` |
+| `pnn editar N "comentário"` · `pnn apagar N` (anotação) | `annotation.edited` · `annotation.deleted` |
+
+- **Só EPUB.** É texto com estrutura — parágrafos, títulos, citações —, se
+  ajusta à largura do terminal e se lê com Go puro, sem programa externo. O
+  PDF guarda onde cada letra é desenhada na folha: o texto extraído traz
+  cabeçalho e número de página no meio, hifenização e listas partidas, e
+  some de vez no escaneado. MOBI/AZW é formato fechado da Amazon. Os dois são
+  recusados com a saída (o Calibre converte MOBI: `ebook-convert x.mobi
+  x.epub`); EPUB só de imagens (livro escaneado) e EPUB com DRM também, cada
+  um com a sua mensagem.
+- **O pnn guarda o arquivo.** O cadastro copia o EPUB para
+  `~/.pnn/livros/<id>.epub` (0600): o original pode mudar de lugar ou sumir.
+  O `pnn sync`, depois dos eventos, sobe cifrado o livro que só existe aqui e
+  baixa o que só existe no bucket — decifrado, conferido pelo sha256 do
+  cadastro e guardado. Na máquina nova basta `PNN_LIVROS_SENHA=… pnn sync`.
+  Sem a senha, os eventos sincronizam e o sync avisa quantos livros esperam;
+  senha errada vira aviso por livro ("não abriu"), sem derrubar o resto.
+  `pnn livros procurar ~/Livros` guarda de novo, **pelo conteúdo**, o que
+  faltar sem passar pelo bucket.
+- **Cifrado, não "disfarçado".** No bucket só há
+  `livros/<id aleatório>.pnnlivro`: AES-256-GCM com chave da senha dos livros
+  (PBKDF2). Formato próprio sozinho não esconderia nada — o repositório é
+  público —, e hash não serve (não devolve o livro). Os metadados do log
+  (título, autor, trechos citados) seguem legíveis no bucket.
+- **Posição, não página.** A anotação aponta para (capítulo do spine,
+  parágrafo) e guarda o **trecho citado** — o modelo do W3C Web Annotation
+  (seletor de posição + seletor de citação). Quando o EPUB traz a paginação
+  da edição impressa (`pagebreak` ou `page-list`), a posição leva também a
+  página, para citar ("p. 40"). Ao abrir, o trecho **reancora** a anotação
+  se o parágrafo mudou de lugar (outra edição, outro extrator); a que não é
+  achada fica na posição gravada, marcada "trecho não encontrado nesta
+  edição".
+
+**Modo de leitura** (`pnn ler`): o livro na tela, quebrado em até 76
+colunas, com o parágrafo atual marcado por `▌` e os anotados por `✎` na
+margem; o cabeçalho diz onde se está (`cap. 3/24 · 42% · p. 40`) e a régua,
+o título do capítulo; o rodapé mostra as anotações do parágrafo atual.
+`↑↓`/`j k` andam por parágrafo (o maior que a tela rola por linha),
+`Espaço`/`PgDn` e `b`/`PgUp` por tela, `←→`/`h l` por capítulo, `Home`/`End`
+(`g`/`G`) vão ao começo e ao fim do capítulo, `n`/`N` à próxima e à anterior
+anotação. Abre **de onde parou**; `Esc` (ou `q`) sai e grava o
+`book.progressed` — só se a posição mudou —, e a CLI imprime onde parou e
+quantas anotações foram feitas.
+
+Os comandos `/` são os da escrita, com o **livro e o parágrafo atual** como
+ponto de referência:
+
+| Comando | O que faz | Evento(s) |
+|---|---|---|
+| `/nota comentário` | anota o parágrafo (citação: o parágrafo, cortado em 280 caracteres) | `annotation.created` |
+| `/nota trecho \| comentário` | anota só o trecho (digitado sem caixa nem acento; precisa estar no parágrafo) | `annotation.created` |
+| `/grifo [trecho]` | grifa o parágrafo inteiro, ou só o trecho (sublinhado na tela) | `annotation.created` sem `text` |
+| `/notas [palavras]` | lista as anotações (as 9 a partir daqui; palavras filtram); o número vai até ela | — |
+| `/editar comentário` · `/apagar` | a anotação do parágrafo (várias: escolhe pelo número) | `annotation.edited` · `annotation.deleted` |
+| `/ir 3` · `/ir 50%` · `/ir p40` · `/ir palavras` | capítulo, porcentagem, página impressa, título do capítulo | — |
+| `/buscar termo` | procura no livro a partir daqui (sem caixa nem acento), com o trecho em volta | — |
+| `/cartao frente \| verso` | cartão solto com a fonte no `source_title` ("Livro, cap. 3 (Título), p. 40"), **ligado ao livro** | `card.created` v2 + `link.created` |
+| `/distracao texto` | o pensamento solto vai para a caixa de entrada (no foco: a distração da sessão) | `note.captured` (ou `distraction.captured`) |
+| `/sair` | o mesmo que `Esc` | `book.progressed` |
+
+- Teclas que chegam juntas (tecla segurada, digitação rápida) valem uma a
+  uma: `jjj` anda três parágrafos.
+- **Livro é nó de sinapse** (catálogo 1.7): `pnn dia` → `pnn ligar 1
+  "adult adhd"` liga a tarefa ao livro — para livro, basta um trecho do
+  título que case com um só (títulos de livro são longos); `pnn livros`
+  mostra `⚡N`, `pnn sinapses` rotula "livro Título" e `pnn revisar
+  --ao-redor N` estuda os cartões ligados ao livro. Livro não ganha tag
+  (como a tarefa): o assunto dele é uma página ligada.
+- **Ler conta como estudar**: `book.progressed` e `annotation.created`
+  marcam o dia no streak do `pnn dia`, e o `pnn semana` mostra, por dia,
+  os livros lidos e as anotações (SPEC §4.4 e §4.7) — livro lido e
+  anotação feita, não páginas: o "onde parei" salta com `/ir`.
+- **Leitura no foco**: a tarefa ligada a um livro abre o leitor dentro do
+  `pnn foco` (abaixo, "Modo de leitura no foco").
+- **Na extensão**: a seção Livros **cadastra EPUB** (confere o arquivo — as
+  mesmas recusas da CLI para PDF, MOBI e DRM —, lê título e autor, cifra com
+  a senha dos livros do painel de sync e envia ao bucket; só então grava o
+  `book.registered`) e lista os livros com progresso e anotações. Ler é da
+  CLI: o `pnn sync` traz o arquivo. O nó `livro` aparece rotulado nas
+  sinapses e no "ao redor de" da revisão, e a retrospectiva mostra a
+  leitura.
+
 ### Estudo (RF08, RF09, RF11)
 
 | Comando | Evento(s) |
@@ -326,6 +425,9 @@ resposta` por linha; o `frame` é um campo aberto para métodos de estudo futuro
 | `pnn pausa --das HH:MM --ate HH:MM [--dia D]` | `pause.logged` (retroativa — "esqueci de apertar o botão") |
 | `pnn semana [N] [--de AAAA-MM-DD]` | — (review; retrospectiva de qualquer semana) |
 | `pnn sync` | — (bucket S3, SPEC §5; imprime `▲ enviados · ▼ recebidos`) |
+| `pnn login` | — (entra neste dispositivo: pede bucket, endpoint, região, prefixo, credencial e senha dos livros — segredos sem eco —, confere que lista o bucket, grava `~/.pnn/login.json` (0600) e restaura eventos e livros; SPEC §5, Login e logout) |
+| `pnn logout [--sim] [--descartar-livros] [--descartar]` | — (sincroniza, **confere** que o objeto deste dispositivo no bucket tem todos os seus eventos e que todo livro guardado aqui está lá, e só então apaga a réplica, os livros, a credencial e as páginas em `/tmp/pnn-*.md`; avisa o que fica fora do alcance: variáveis no shell, histórico, notificações) |
+| `pnn config [--json]` | — (as variáveis de ambiente que o pnn lê, por assunto: o valor neste terminal ou o que vale quando vazia, para que serve e o campo equivalente no painel da extensão; segredo só como "definida"; a lista é testada contra o código) |
 
 `pnn sync` é uma operação só e idempotente: baixa o que os outros dispositivos
 subiram, funde no log local (dedup por `id` + ordem total) e sobe os eventos
@@ -425,6 +527,22 @@ do texto, onde se continua escrevendo.
 **`pnn escrever N|título`**: o mesmo editor e os mesmos comandos **fora do
 foco** — sem sessão, sem relógio, sem pausa; `Esc` grava e sai, e a CLI
 imprime o resultado da última gravação.
+
+**Modo de leitura no foco** (catálogo 1.7): a tarefa ligada a um **livro**
+("ler o capítulo de scheduling") abre o leitor do `pnn ler` **dentro da
+sessão** — o relógio e a tarefa na barra vermelha, o livro e o capítulo na
+régua, de onde se parou. O que está ligado à tarefa se abre pelo mesmo
+caminho: uma coisa só (página ou livro), o `pnn foco N` abre direto nela;
+várias, pergunta "Abrir o quê?" (`[1] página docs cli · [2] 📖 Livro`); o
+`Ctrl+O` do relógio grande faz o mesmo e **retoma** o livro no parágrafo em
+que estava. Como na escrita: `Esc` (ou `q`) volta ao relógio grande sem
+encerrar o bloco, `Ctrl+P` é a pausa, `Ctrl+C` encerra, o check-in aparece
+no rodapé (o `s`/`n` responde sem mexer na leitura), e a `/distracao` é a
+da sessão. O **"onde parei"** (`book.progressed`, com o `session_id`) é
+gravado ao voltar ao relógio, na pausa, no fim do bloco e ao encerrar —
+sempre que a posição mudou. No relógio grande, `/ligar` acha livros também,
+e o livro recém-ligado entra no `Ctrl+O` na hora. Livro sem arquivo neste
+dispositivo vira aviso na linha de status, sem derrubar a sessão.
 
 ## 4. Telas
 

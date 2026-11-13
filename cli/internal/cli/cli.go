@@ -28,6 +28,10 @@ func NewRoot(a *app.App) *cobra.Command {
 		newPaginasCmd(a),
 		newPaginaCmd(a),
 		newEscreverCmd(a),
+		newLivroCmd(a),
+		newLivrosCmd(a),
+		newLerCmd(a),
+		newAnotacoesCmd(a),
 		newBuscarCmd(a),
 		newFixarCmd(a),
 		newFeitoCmd(a),
@@ -55,6 +59,9 @@ func NewRoot(a *app.App) *cobra.Command {
 		newVoltaCmd(a),
 		newSemanaCmd(a),
 		newSyncCmd(a),
+		newConfigCmd(a),
+		newLoginCmd(a),
+		newLogoutCmd(a),
 		newProcrastinaCmd(a),
 	)
 	return root

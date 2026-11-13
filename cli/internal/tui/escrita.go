@@ -99,30 +99,61 @@ type chooser struct {
 	pick    func(*Foco, Choice) (string, error) // pode trocar a página aberta
 }
 
-// Onde um comando vale: na escrita (o ponto de referência é a página) ou no
-// relógio grande (é a tarefa em foco). help vazio = não vale ali.
+// paletteMode é onde os comandos "/" foram abertos: no relógio grande (o
+// ponto de referência é a tarefa em foco), na escrita (é a página) ou na
+// leitura (é o livro e o parágrafo atual — leitura.go).
+type paletteMode int
+
+const (
+	modeClock paletteMode = iota
+	modePage
+	modeBook
+)
+
+func (m Foco) mode() paletteMode {
+	switch {
+	case m.reading:
+		return modeBook
+	case m.writing:
+		return modePage
+	}
+	return modeClock
+}
+
+// Onde um comando vale: um texto de ajuda por modo. help vazio = não vale ali.
 type writeCommand struct {
-	name, helpPage, helpClock string
+	name, helpPage, helpClock, helpBook string
 }
 
-// A ordem importa: Enter executa o primeiro que casa (/tar → /tarefa).
+// A ordem importa: Enter executa o primeiro que casa (/tar → /tarefa,
+// /n → /nota).
 var writeCommands = []writeCommand{
-	{"pagina", "troca de página, ou cria outra ligada à tarefa — /pagina Título", "cria uma página ligada à tarefa e começa a escrever — /pagina Título"},
-	{"tarefa", "cria uma tarefa ligada à página (subtarefa da em foco) — /tarefa Título", "cria uma subtarefa da tarefa em foco — /tarefa Título"},
-	{"tarefas", "lista as tarefas abertas — o número conclui", "lista as tarefas abertas — o número conclui"},
-	{"feito", "conclui uma tarefa (a em foco e as da página primeiro)", "conclui uma tarefa (a em foco primeiro)"},
-	{"cartao", "cria um cartão ligado à página — /cartao frente | verso", "cria um cartão ligado à tarefa — /cartao frente | verso"},
-	{"tag", "classifica a página — /tag cli docs", ""},
-	{"untag", "tira tags da página — /untag docs", ""},
-	{"ligar", "liga a página a um cartão ou página — /ligar pod", "liga a tarefa a uma página ou cartão — /ligar pod"},
-	{"distracao", "anota uma distração sem sair do foco", "anota uma distração (o mesmo que a linha de baixo)"},
-	{"salvar", "grava agora (Ctrl+S)", ""},
-	{"sair", "volta ao relógio grande (Esc)", ""},
+	{"nota", "", "", "anota o parágrafo atual — /nota comentário, ou /nota trecho | comentário"},
+	{"notas", "", "", "lista as anotações — o número vai até ela; /notas palavra filtra"},
+	{"grifo", "", "", "grifa o parágrafo atual, ou só um trecho dele — /grifo palavras do trecho"},
+	{"ir", "", "", "vai a outro ponto — /ir 3 (capítulo) · /ir 50% · /ir p40 · /ir palavras do título"},
+	{"buscar", "", "", "procura no livro, sem caixa nem acento — /buscar termo"},
+	{"editar", "", "", "troca o comentário da anotação deste parágrafo — /editar novo comentário"},
+	{"apagar", "", "", "apaga a anotação deste parágrafo"},
+	{"pagina", "troca de página, ou cria outra ligada à tarefa — /pagina Título", "cria uma página ligada à tarefa e começa a escrever — /pagina Título", ""},
+	{"tarefa", "cria uma tarefa ligada à página (subtarefa da em foco) — /tarefa Título", "cria uma subtarefa da tarefa em foco — /tarefa Título", ""},
+	{"tarefas", "lista as tarefas abertas — o número conclui", "lista as tarefas abertas — o número conclui", ""},
+	{"feito", "conclui uma tarefa (a em foco e as da página primeiro)", "conclui uma tarefa (a em foco primeiro)", ""},
+	{"cartao", "cria um cartão ligado à página — /cartao frente | verso", "cria um cartão ligado à tarefa — /cartao frente | verso", "cria um cartão com a fonte (livro, capítulo, página) — /cartao frente | verso"},
+	{"tag", "classifica a página — /tag cli docs", "", ""},
+	{"untag", "tira tags da página — /untag docs", "", ""},
+	{"ligar", "liga a página a um cartão, página ou livro — /ligar pod", "liga a tarefa a uma página, cartão ou livro — /ligar pod", ""},
+	{"distracao", "anota uma distração sem sair do foco", "anota uma distração (o mesmo que a linha de baixo)", "anota um pensamento solto sem sair da leitura"},
+	{"salvar", "grava agora (Ctrl+S)", "", ""},
+	{"sair", "volta ao relógio grande (Esc)", "", "grava onde parou e sai (Esc)"},
 }
 
-func (c writeCommand) help(writing bool) string {
-	if writing {
+func (c writeCommand) help(mode paletteMode) string {
+	switch mode {
+	case modePage:
 		return c.helpPage
+	case modeBook:
+		return c.helpBook
 	}
 	return c.helpClock
 }
@@ -220,12 +251,15 @@ func (m Foco) paletteLines() int {
 	if c := m.palette.choose; c != nil {
 		return 2 + min(len(c.options), 9)
 	}
-	return 1 + min(len(matchCommands(m.palette.input.Value(), m.writing)), 6)
+	return 1 + min(len(matchCommands(m.palette.input.Value(), m.mode())), 6)
 }
 
 // resizeEditor encaixa o editor entre o cabeçalho (2 linhas) e o rodapé (3),
 // mais o que os comandos abertos ocupam.
 func (m *Foco) resizeEditor() {
+	if m.reading && m.read != nil { // na leitura, o parágrafo atual segue na tela
+		m.show(true)
+	}
 	if m.write == nil {
 		return
 	}
@@ -452,14 +486,14 @@ func foldASCII(s string) string {
 
 // matchCommands: os comandos que valem aqui e cujo nome começa com a primeira
 // palavra digitada.
-func matchCommands(input string, writing bool) []writeCommand {
+func matchCommands(input string, mode paletteMode) []writeCommand {
 	word := foldASCII(strings.TrimSpace(input))
 	if i := strings.IndexFunc(word, unicode.IsSpace); i >= 0 {
 		word = word[:i]
 	}
 	var out []writeCommand
 	for _, c := range writeCommands {
-		if c.help(writing) != "" && strings.HasPrefix(c.name, word) {
+		if c.help(mode) != "" && strings.HasPrefix(c.name, word) {
 			out = append(out, c)
 		}
 	}
@@ -469,6 +503,9 @@ func matchCommands(input string, writing bool) []writeCommand {
 // interrupt é o Ctrl+C de dentro dos comandos: o mesmo da tela por baixo.
 func (m Foco) interrupt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.closePalette()
+	if m.reading {
+		return m.updateReading(msg)
+	}
 	if m.writing {
 		return m.updateWriting(msg)
 	}
@@ -494,6 +531,9 @@ func (m Foco) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyRunes:
 		if string(msg.Runes) == "/" && p.input.Value() == "" { // "//" escreve a barra
 			m.closePalette()
+			if m.reading {
+				return m, nil // na leitura não há texto onde escrever a barra
+			}
 			if m.writing {
 				m.write.record(msg)
 				m.write.editor.InsertString("/")
@@ -504,7 +544,7 @@ func (m Foco) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case tea.KeyTab:
-		if found := matchCommands(p.input.Value(), m.writing); len(found) > 0 {
+		if found := matchCommands(p.input.Value(), m.mode()); len(found) > 0 {
 			_, args, _ := strings.Cut(strings.TrimSpace(p.input.Value()), " ")
 			p.input.SetValue(strings.TrimSpace(found[0].name+" "+args) + " ")
 			p.input.CursorEnd()
@@ -546,7 +586,7 @@ func (m *Foco) refreshAfter() {
 func (m Foco) runCommand(line string) (tea.Model, tea.Cmd) {
 	name, args, _ := strings.Cut(strings.TrimSpace(line), " ")
 	args = strings.TrimSpace(args)
-	found := matchCommands(name, m.writing)
+	found := matchCommands(name, m.mode())
 	for _, c := range found {
 		if c.name == foldASCII(name) {
 			found = []writeCommand{c}
@@ -557,6 +597,9 @@ func (m Foco) runCommand(line string) (tea.Model, tea.Cmd) {
 		m.closePalette()
 		m.status = fmt.Sprintf("⚠ comando desconhecido aqui: /%s — / e Tab mostram os comandos", name)
 		return m, nil
+	}
+	if m.reading {
+		return m.runReadCommand(found[0].name, args)
 	}
 	act := m.cfg.Write
 	src, hasSrc := m.source()
@@ -681,8 +724,13 @@ func (m Foco) runCommand(line string) (tea.Model, tea.Cmd) {
 		}
 		link := func(f *Foco, c Choice) (string, error) {
 			status, err := act.Link(src, c)
-			if err == nil && c.Kind == "page" && !f.writing { // página ligada à tarefa: entra no Ctrl+O
-				f.cfg.Pages = append(f.cfg.Pages, LinkedPage{ID: c.ID, Title: strings.TrimPrefix(c.Label, "página ")})
+			if err == nil && !f.writing { // ligado à tarefa: entra no Ctrl+O
+				switch c.Kind {
+				case "page":
+					f.cfg.Pages = append(f.cfg.Pages, LinkedPage{ID: c.ID, Title: strings.TrimPrefix(c.Label, "página ")})
+				case "book":
+					f.cfg.Books = append(f.cfg.Books, LinkedBook{ID: c.ID, Title: strings.TrimPrefix(c.Label, "livro ")})
+				}
 			}
 			return status, err
 		}
@@ -797,7 +845,7 @@ func (m Foco) paletteView() []string {
 		return append(lines, " "+dim.Render("número escolhe · Esc cancela"))
 	}
 	lines := []string{m.palette.input.View()}
-	for i, c := range matchCommands(m.palette.input.Value(), m.writing) {
+	for i, c := range matchCommands(m.palette.input.Value(), m.mode()) {
 		if i == 6 {
 			break
 		}
@@ -805,7 +853,7 @@ func (m Foco) paletteView() []string {
 		if i == 0 {
 			marker = " ▸ " // o que o Enter executa
 		}
-		lines = append(lines, marker+blueText.Render("/"+c.name)+"  "+dim.Render(c.help(m.writing)))
+		lines = append(lines, marker+blueText.Render("/"+c.name)+"  "+dim.Render(c.help(m.mode())))
 	}
 	return lines
 }

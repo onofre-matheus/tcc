@@ -39,13 +39,14 @@ func newFocoCmd(a *app.App) *cobra.Command {
 
 			var taskID, title string
 			var pages []tui.LinkedPage
+			var books []tui.LinkedBook
 			if len(args) == 1 {
 				var err error
 				taskID, title, err = resolveTask(a, args[0])
 				if err != nil {
 					return err
 				}
-				if pages, err = taskPages(a, taskID); err != nil {
+				if pages, books, err = taskLinked(a, taskID); err != nil {
 					return err
 				}
 			}
@@ -62,6 +63,8 @@ func newFocoCmd(a *app.App) *cobra.Command {
 				Pages:        pages,
 				EditPage:     focusEditPage(a),
 				Write:        writeActions{a},
+				Read:         newReadActions(a),
+				Books:        books,
 				StartWriting: !relogio,
 			})
 			final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
@@ -118,24 +121,33 @@ func emitVTo(a *app.App) func(string, int, map[string]any) error {
 	}
 }
 
-// taskPages: as páginas (não arquivadas) ligadas à tarefa por sinapse — o
-// contexto da tarefa, que a tela de foco mostra e deixa editar (Ctrl+E).
-func taskPages(a *app.App, taskID string) ([]tui.LinkedPage, error) {
+// taskLinked: as páginas e os livros (não arquivados) ligados à tarefa por
+// sinapse — o contexto da tarefa, que a tela de foco mostra e abre (Ctrl+O:
+// a página na escrita, o livro na leitura; Ctrl+E: a página no $EDITOR).
+func taskLinked(a *app.App, taskID string) ([]tui.LinkedPage, []tui.LinkedBook, error) {
 	g, err := loadGraph(a)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var pages []tui.LinkedPage
+	var books []tui.LinkedBook
 	for _, key := range g.links.Neighbors[core.Node{Kind: core.NodeTask, ID: taskID}.Key()] {
 		node, ok := core.ParseNode(key)
-		if !ok || node.Kind != core.NodePage {
+		if !ok {
 			continue
 		}
-		if page, ok := g.pages.Pages[node.ID]; ok && !page.Archived {
-			pages = append(pages, tui.LinkedPage{ID: node.ID, Title: page.Title})
+		switch node.Kind {
+		case core.NodePage:
+			if page, ok := g.pages.Pages[node.ID]; ok && !page.Archived {
+				pages = append(pages, tui.LinkedPage{ID: node.ID, Title: page.Title})
+			}
+		case core.NodeBook:
+			if book, ok := g.books.Books[node.ID]; ok && !book.Archived {
+				books = append(books, tui.LinkedBook{ID: node.ID, Title: book.Title})
+			}
 		}
 	}
-	return pages, nil
+	return pages, books, nil
 }
 
 // focusEditPage edita a página de dentro do foco: o resultado vira a linha de

@@ -79,7 +79,7 @@ func renderSemana(a *app.App, s core.ReviewState) error {
 		}
 		d := s.Days[day]
 		label := fmt.Sprintf(" %s %s", weekdayShortPT[weekdayOf(day)], shortDatePT(day))
-		if d.FocusMinutes == 0 && d.Reviews == 0 && d.PauseMinutes == 0 && d.Checkins == 0 {
+		if d.FocusMinutes == 0 && d.Reviews == 0 && d.PauseMinutes == 0 && d.Checkins == 0 && d.BooksRead == 0 {
 			fmt.Fprintf(a.Out, "%s  %s\n", label, th.Dim("—"))
 			continue
 		}
@@ -96,6 +96,12 @@ func renderSemana(a *app.App, s core.ReviewState) error {
 		if d.Checkins > 0 {
 			line += fmt.Sprintf(" · na tarefa %d/%d", d.CheckinsOnTask, d.Checkins)
 		}
+		if d.BooksRead > 0 {
+			line += " · 📖 " + plural(d.BooksRead, "livro", "livros")
+			if d.Annotations > 0 {
+				line += ", " + plural(d.Annotations, "anotação", "anotações")
+			}
+		}
 		fmt.Fprintln(a.Out, line)
 	}
 
@@ -105,6 +111,9 @@ func renderSemana(a *app.App, s core.ReviewState) error {
 		t.FocusMinutes, plural(t.Reviews, "revisão", "revisões"), t.PauseMinutes, t.Completed, t.Interrupted)
 	if t.Checkins > 0 {
 		fmt.Fprintf(a.Out, " check-ins de atenção: na tarefa em %d de %d\n", t.CheckinsOnTask, t.Checkins)
+	}
+	if t.BooksRead > 0 {
+		fmt.Fprintf(a.Out, " leitura: %s · %s\n", plural(t.BooksRead, "livro", "livros"), plural(t.Annotations, "anotação", "anotações"))
 	}
 	if s.AppointmentMinutes > 0 {
 		fmt.Fprintf(a.Out, " agendado no calendário: %d min · executado em foco: %d min\n", s.AppointmentMinutes, t.FocusMinutes)

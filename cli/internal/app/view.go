@@ -15,7 +15,7 @@ import (
 const viewFile = "last-view.json"
 
 type ViewRef struct {
-	Kind string `json:"kind"` // task, appointment, deck, card, tag, study, note, distraction, page
+	Kind string `json:"kind"` // task, appointment, deck, card, tag, study, note, distraction, page, book, annotation
 	ID   string `json:"id"`
 }
 

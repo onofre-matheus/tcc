@@ -1,7 +1,7 @@
 // Conexões explícitas (spec/SPEC.md §3 "Conexões e renomeação de tag" e
 // §4.12): o [[link]] do Obsidian como evento. Uma conexão liga dois nós —
-// cartão, deck, tag, página ou tarefa (1.6) — e a vizinhança é não
-// direcionada. O id da tag é o próprio nome normalizado, então ligar a uma
+// cartão, deck, tag, página ou tarefa (1.6), livro (1.7) — e a vizinhança é
+// não direcionada. O id da tag é o próprio nome normalizado, então ligar a uma
 // tag não exige que ela "exista".
 package core
 
@@ -18,6 +18,7 @@ const (
 	NodeTag  = "tag"
 	NodePage = "page" // catálogo 1.6
 	NodeTask = "task" // catálogo 1.6
+	NodeBook = "book" // catálogo 1.7
 )
 
 type Node struct {
@@ -35,7 +36,7 @@ func (n Node) Clean() (Node, bool) {
 	switch n.Kind {
 	case NodeTag:
 		n.ID = NormalizeTag(n.ID)
-	case NodeCard, NodeDeck, NodePage, NodeTask:
+	case NodeCard, NodeDeck, NodePage, NodeTask, NodeBook:
 		n.ID = strings.TrimSpace(n.ID)
 	default:
 		return n, false
@@ -73,6 +74,7 @@ func init() {
 func Links(events []Event) (LinksState, error) {
 	type edge struct{ from, to Node }
 	cards, decks, pages, tasks := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	books := map[string]bool{}
 	edges := map[string]*edge{}
 	relations := map[string]*string{}
 	removed := map[string]bool{}
@@ -109,6 +111,20 @@ func Links(events []Event) (LinksState, error) {
 			}
 			if pl.PageID != "" && strings.TrimSpace(pl.Title) != "" {
 				pages[pl.PageID] = true
+			}
+
+		case "book.registered":
+			// a mesma validação da projeção de livros (§3, Livros): sem
+			// título, o livro não existe e não se conecta
+			pl, err := decodePayload[struct {
+				BookID string `json:"book_id"`
+				Title  string `json:"title"`
+			}](event)
+			if err != nil {
+				return LinksState{}, err
+			}
+			if pl.BookID != "" && strings.TrimSpace(pl.Title) != "" {
+				books[pl.BookID] = true
 			}
 
 		case "task.created":
@@ -156,6 +172,8 @@ func Links(events []Event) (LinksState, error) {
 					return pages[n.ID]
 				case NodeTask:
 					return tasks[n.ID]
+				case NodeBook:
+					return books[n.ID]
 				}
 				return true // tag sempre existe
 			}

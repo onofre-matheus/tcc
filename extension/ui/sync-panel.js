@@ -27,6 +27,8 @@ export async function mountSyncPanel(container) {
     <div class="row" style="align-items: center">
       <span class="meta grow" id="syncState">—</span>
       <button class="btn sm" id="syncNow">Sincronizar</button>
+      <button class="btn ghost sm" id="syncLogout" hidden
+        title="Sincroniza, confere que tudo está no bucket e apaga deste navegador o log, a credencial e a configuração">Sair deste dispositivo</button>
     </div>
     <details id="syncSetup" style="margin-top: 10px">
       <summary class="meta" style="cursor: pointer">Configurar bucket e chave</summary>
@@ -36,6 +38,8 @@ export async function mountSyncPanel(container) {
         <input id="syncKey" placeholder="Access key ID" autocomplete="off" spellcheck="false" />
         <input id="syncSecret" type="password" placeholder="Secret access key" autocomplete="new-password" />
         <input id="syncEndpoint" placeholder="Endpoint (só R2/MinIO/Backblaze)" autocomplete="off" />
+        <input id="syncBookPass" type="password" placeholder="Senha dos livros (a mesma PNN_LIVROS_SENHA da CLI)"
+          autocomplete="new-password" title="Cifra os EPUBs no bucket — sem ela, os livros não são cadastrados aqui" />
         <div class="row">
           <button class="btn sm primary grow" type="submit">Salvar</button>
           <button class="btn ghost sm" type="button" id="syncForget"
@@ -50,8 +54,10 @@ export async function mountSyncPanel(container) {
   const formMsg = $("syncFormMsg");
 
   async function renderState() {
+    $("syncLogout").hidden = true;
     try {
       const config = await loadSyncConfig();
+      $("syncLogout").hidden = false;
       const status = await store.syncStatus();
       if (!status) {
         state.textContent = `pronto — ${config.bucket}`;
@@ -80,6 +86,10 @@ export async function mountSyncPanel(container) {
     $("syncSecret").placeholder = stored.secretAccessKey
       ? SAVED_PLACEHOLDER
       : "Secret access key";
+    $("syncBookPass").value = "";
+    $("syncBookPass").placeholder = stored.bookPassphrase
+      ? SAVED_PLACEHOLDER
+      : "Senha dos livros (a mesma PNN_LIVROS_SENHA da CLI)";
   }
 
   $("syncNow").onclick = async () => {
@@ -89,6 +99,28 @@ export async function mountSyncPanel(container) {
     await store.syncQuietly(); // nunca lança; o estado conta o que houve
     button.disabled = false;
     await renderState();
+  };
+
+  // Sair: só apaga depois de conferir que o bucket tem tudo (store.logout).
+  $("syncLogout").onclick = async () => {
+    const ok = window.confirm(
+      "Sincronizar, conferir que tudo está no bucket e apagar deste navegador o log, a credencial e a configuração?\n\n" +
+        "Para voltar, é só configurar o sync de novo: o log é restaurado do bucket.",
+    );
+    if (!ok) return;
+    const button = $("syncLogout");
+    button.disabled = true;
+    state.textContent = "sincronizando e conferindo…";
+    try {
+      const { verified } = await store.logout();
+      await fillForm();
+      await renderState();
+      state.textContent = `🔒 navegador limpo — ${verified} evento(s) deste navegador conferidos no bucket`;
+    } catch (error) {
+      state.textContent = `nada foi apagado: ${error.message ?? error}`;
+    } finally {
+      button.disabled = false;
+    }
   };
 
   $("syncForm").onsubmit = async (event) => {
@@ -101,6 +133,8 @@ export async function mountSyncPanel(container) {
       endpoint: $("syncEndpoint").value.trim(),
       // Em branco preserva o segredo guardado — o campo nunca o exibe de volta.
       secretAccessKey: $("syncSecret").value.trim() || stored.secretAccessKey || "",
+      // A senha dos livros também nunca volta à tela; em branco, preserva.
+      bookPassphrase: $("syncBookPass").value.trim() || stored.bookPassphrase || "",
     };
     await chrome.storage.local.set({ [CONFIG_KEY]: config });
     await fillForm();

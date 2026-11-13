@@ -1,13 +1,13 @@
 // Conexões explícitas (spec/SPEC.md §3 "Conexões e renomeação de tag" e
 // §4.12): o [[link]] do Obsidian como evento. Uma conexão liga dois nós —
-// cartão, deck, tag, página ou tarefa (1.6) — e a vizinhança é não
-// direcionada. O id da tag é o próprio nome normalizado, então ligar a uma
+// cartão, deck, tag, página ou tarefa (1.6), livro (1.7) — e a vizinhança é
+// não direcionada. O id da tag é o próprio nome normalizado, então ligar a uma
 // tag não exige que ela "exista".
 
 import { normalize } from "./envelope.js";
 import { normalizeTag, renameTag, decodeRename } from "./tags.js";
 
-const KINDS = new Set(["card", "deck", "tag", "page", "task"]);
+const KINDS = new Set(["card", "deck", "tag", "page", "task", "book"]);
 
 // Normaliza o id de tag e valida o nó (kind conhecido, id não vazio); null =
 // inválido. Existência de cartão/deck/página é checada por quem tem o estado.
@@ -31,7 +31,7 @@ export function parseNode(key) {
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function project(events) {
-  const cards = new Set(), decks = new Set(), pages = new Set(), tasks = new Set();
+  const cards = new Set(), decks = new Set(), pages = new Set(), tasks = new Set(), books = new Set();
   const edges = new Map(); // link_id → { from, to, relation }
   const removed = new Set();
   const exists = (n) =>
@@ -39,6 +39,7 @@ export function project(events) {
       : n.kind === "deck" ? decks.has(n.id)
       : n.kind === "page" ? pages.has(n.id)
       : n.kind === "task" ? tasks.has(n.id)
+      : n.kind === "book" ? books.has(n.id)
       : true;
 
   for (const event of normalize(events)) {
@@ -49,6 +50,8 @@ export function project(events) {
     // página não existe e não se conecta
     else if (event.type === "page.created") { if (p.page_id && String(p.title ?? "").trim()) pages.add(p.page_id); }
     else if (event.type === "task.created") { if (p.task_id) tasks.add(p.task_id); }
+    // a mesma validação da projeção de livros (§3, Livros)
+    else if (event.type === "book.registered") { if (p.book_id && String(p.title ?? "").trim()) books.add(p.book_id); }
     // apagar é tombstone: a tarefa sai do estado, e as sinapses dela junto
     else if (event.type === "task.deleted") tasks.delete(p.task_id);
     else if (event.type === "link.created") {

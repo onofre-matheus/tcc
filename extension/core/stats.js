@@ -1,5 +1,6 @@
 // Consistência de estudo (spec/SPEC.md §4.4) — RF06.
-// Dia estudado = dia local com ≥1 card.reviewed ou session.ended.
+// Dia estudado = dia local com ≥1 card.reviewed, session.ended ou, desde o
+// 1.7, leitura (book.progressed, annotation.created).
 // Streak = dias estudados consecutivos terminando em hoje ou ontem.
 
 import { normalize } from "./envelope.js";
@@ -15,7 +16,7 @@ export function project(events, { now, tz }) {
       const day = localDate(event.ts, tz);
       studiedDays.add(day);
       if (day === today) reviews_today++;
-    } else if (event.type === "session.ended") {
+    } else if (["session.ended", "book.progressed", "annotation.created"].includes(event.type)) {
       studiedDays.add(localDate(event.ts, tz));
     }
   }

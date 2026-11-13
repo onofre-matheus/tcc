@@ -146,7 +146,7 @@ func newRevisarCmd(a *app.App) *cobra.Command {
 	cmd.Flags().StringSliceVar(&tags, "tag", nil, "estuda só cartões com a tag ou descendentes (repetível: casa qualquer uma)")
 	cmd.Flags().BoolVar(&treino, "treino", false, "depois dos vencidos, treina os não vencidos (card.practiced: não altera a caixa)")
 	cmd.Flags().StringVar(&sessao, "sessao", "", "usa o filtro de uma sessão salva (N de `pnn sessoes` ou o nome)")
-	cmd.Flags().StringSliceVar(&around, "ao-redor", nil, "estuda a vizinhança do nó (N da última tela, '#tag' ou deck) e dos ligados a ele (repetível)")
+	cmd.Flags().StringSliceVar(&around, "ao-redor", nil, "estuda a vizinhança do nó (N da última tela, '#tag', deck ou livro) e dos ligados a ele (repetível)")
 	return cmd
 }
 

@@ -1,0 +1,53 @@
+{
+  "name": "book.registered apara o título e vale o primeiro (repetido e título vazio são ignorados); book.edited é LWW por campo (título vazio deixa o anterior; mesma posição de lc e ts: decide o device); book.archived tira o livro da ordem sem mudar updated_at; id inexistente é ignorado",
+  "projection": "books",
+  "now": "2026-11-12T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "book.registered", "v": 1, "lc": 1, "ts": "2026-11-10T10:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": " Mastering Your Adult ADHD ", "author": "Safren", "format": "epub", "sha256": "aaa" } },
+    { "id": "evt-02", "type": "book.registered", "v": 1, "lc": 2, "ts": "2026-11-10T10:05:00Z", "device": "dev-b",
+      "payload": { "book_id": "b1", "title": "Outro", "format": "epub", "sha256": "zzz" } },
+    { "id": "evt-03", "type": "book.registered", "v": 1, "lc": 2, "ts": "2026-11-10T10:06:00Z", "device": "dev-b",
+      "payload": { "book_id": "b2", "title": "   ", "format": "epub", "sha256": "ccc" } },
+    { "id": "evt-04", "type": "book.edited", "v": 1, "lc": 3, "ts": "2026-11-10T10:10:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "  ", "author": " Steven A. Safren " } },
+    { "id": "evt-05", "type": "book.edited", "v": 1, "lc": 4, "ts": "2026-11-10T10:20:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "Mastering Your Adult ADHD (2ª ed.)" } },
+    { "id": "evt-06", "type": "book.edited", "v": 1, "lc": 4, "ts": "2026-11-10T10:20:00Z", "device": "dev-b",
+      "payload": { "book_id": "b1", "title": "Mastering Your Adult ADHD — manual do cliente" } },
+    { "id": "evt-07", "type": "book.registered", "v": 1, "lc": 5, "ts": "2026-11-10T10:30:00Z", "device": "dev-a",
+      "payload": { "book_id": "b3", "title": "Livro arquivado", "format": "epub", "sha256": "bbb" } },
+    { "id": "evt-08", "type": "book.archived", "v": 1, "lc": 6, "ts": "2026-11-10T10:40:00Z", "device": "dev-a",
+      "payload": { "book_id": "b3" } },
+    { "id": "evt-09", "type": "book.edited", "v": 1, "lc": 6, "ts": "2026-11-10T10:41:00Z", "device": "dev-b",
+      "payload": { "book_id": "b9", "title": "não existe" } },
+    { "id": "evt-10", "type": "book.registered", "v": 1, "lc": 7, "ts": "2026-11-10T11:00:00Z", "device": "dev-b",
+      "payload": { "book_id": "b4", "title": "Segundo livro", "format": "epub", "sha256": "ddd" } }
+  ],
+  "expected": {
+    "books": {
+      "b1": {
+        "title": "Mastering Your Adult ADHD — manual do cliente",
+        "author": "Steven A. Safren",
+        "format": "epub",
+        "sha256": "aaa",
+        "archived": false,
+        "progress": null,
+        "progress_percent": null,
+        "progress_at": null,
+        "created_at": "2026-11-10T10:00:00Z",
+        "updated_at": "2026-11-10T10:20:00Z",
+        "annotations": []
+      },
+      "b3": {
+        "title": "Livro arquivado",
+        "archived": true,
+        "updated_at": "2026-11-10T10:30:00Z"
+      },
+      "b4": { "title": "Segundo livro", "author": "" }
+    },
+    "order": ["b4", "b1"]
+  }
+}

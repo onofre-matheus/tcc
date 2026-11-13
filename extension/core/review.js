@@ -27,7 +27,7 @@ export function project(events, { now, tz }) {
   for (let i = 0; i < 7; i++) {
     days[addDays(weekStart, i)] = {
       reviews: 0, focus_minutes: 0, pause_minutes: 0, completed: 0, interrupted: 0,
-      checkins: 0, checkins_on_task: 0,
+      checkins: 0, checkins_on_task: 0, annotations: 0, books_read: 0,
     };
   }
   const inWeek = (day) => day >= weekStart && day <= weekEnd;
@@ -41,6 +41,9 @@ export function project(events, { now, tz }) {
 
   const reasons = {};
   let appointment_minutes = 0;
+  // Leitura (1.7): livros lidos (com progresso ou anotação) por dia e na semana.
+  const booksByDay = new Map();
+  const weekBooks = new Set();
 
   for (const event of normalize(events)) {
     const { payload } = event;
@@ -60,6 +63,14 @@ export function project(events, { now, tz }) {
       const p = ensure(pauses, payload.pause_id);
       p.startTs = payload.starts_at;
       p.endTs = payload.ends_at;
+    } else if (event.type === "book.progressed" || event.type === "annotation.created") {
+      const day = localDate(event.ts, tz);
+      if (inWeek(day) && payload.book_id) {
+        if (!booksByDay.has(day)) booksByDay.set(day, new Set());
+        booksByDay.get(day).add(payload.book_id);
+        weekBooks.add(payload.book_id);
+      }
+      if (event.type === "annotation.created" && payload.annotation_id && inWeek(day)) days[day].annotations += 1;
     } else if (event.type === "card.reviewed") {
       const day = localDate(event.ts, tz);
       if (inWeek(day)) days[day].reviews += 1;
@@ -100,11 +111,14 @@ export function project(events, { now, tz }) {
     if (inWeek(day)) days[day].pause_minutes += minutes;
   }
 
+  for (const [day, books] of booksByDay) days[day].books_read = books.size;
   const totals = {
     reviews: 0, focus_minutes: 0, pause_minutes: 0, completed: 0, interrupted: 0,
-    checkins: 0, checkins_on_task: 0,
+    checkins: 0, checkins_on_task: 0, annotations: 0,
+    books_read: weekBooks.size, // livros distintos, não a soma dos dias
   };
   for (const d of Object.values(days)) {
+    totals.annotations += d.annotations;
     totals.reviews += d.reviews;
     totals.focus_minutes += d.focus_minutes;
     totals.pause_minutes += d.pause_minutes;

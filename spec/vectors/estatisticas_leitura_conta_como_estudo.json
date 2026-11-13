@@ -1,0 +1,16 @@
+{
+  "name": "leitura conta como dia estudado (1.7): book.progressed e annotation.created entram no streak e em days_studied, mas não em reviews_today",
+  "projection": "stats",
+  "now": "2026-11-12T15:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "card.reviewed", "v": 1, "lc": 1, "ts": "2026-11-10T12:00:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "result": "correct" } },
+    { "id": "evt-02", "type": "annotation.created", "v": 1, "lc": 2, "ts": "2026-11-11T22:00:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a1", "book_id": "b1", "loc": { "chapter": 1, "para": 1 }, "quote": "trecho" } },
+    { "id": "evt-03", "type": "book.progressed", "v": 1, "lc": 3, "ts": "2026-11-12T14:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "loc": { "chapter": 2, "para": 4 }, "percent": 10 } }
+  ],
+  "expected": { "days_studied": 3, "streak": 3, "reviews_today": 0 }
+}

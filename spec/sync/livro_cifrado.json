@@ -1,0 +1,16 @@
+{
+  "name": "formato .pnnlivro (SPEC §5, Livros no bucket): com sal e nonce fixos, selar o EPUB dá exatamente este blob nos dois clientes, e abrir o blob devolve o EPUB; senha errada, outro book_id, cabeçalho ou texto cifrado alterado falham na autenticação",
+  "passphrase": "senha dos livros ç",
+  "book_id": "b-0001",
+  "iterations": 1000,
+  "salt_hex": "00112233445566778899aabbccddeeff",
+  "nonce_hex": "a0a1a2a3a4a5a6a7a8a9aaab",
+  "epub_base64": "UEsDBCBFUFVCIGRlIHRlc3RlIOKAlCDDpyDDoyDDqQ==",
+  "blob_base64": "UE5OTElWUk8BAAAD6AARIjNEVWZ3iJmqu8zd7v+goaKjpKWmp6ipqquwHbjx15u90a1KyA36JxrXcwDaOEPDWKEBchPMyJeSMwDAPplPu/a65hU9m+HJNg==",
+  "must_fail": [
+    { "why": "senha errada (sem o cedilha)", "passphrase": "senha dos livros c" },
+    { "why": "objeto de outro livro", "book_id": "b-0002" },
+    { "why": "cabeçalho alterado (byte das iterações)", "flip_byte": 12 },
+    { "why": "texto cifrado alterado", "flip_byte": 60 }
+  ]
+}

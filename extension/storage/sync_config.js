@@ -21,6 +21,9 @@ const FIELDS = [
   "accessKeyId",
   "secretAccessKey",
   "sessionToken",
+  // Senha dos livros (SPEC §5, "Livros no bucket"): cifra os EPUBs
+  // cadastrados. Opcional — o sync de eventos não precisa dela.
+  "bookPassphrase",
 ];
 
 export class SyncNotConfigured extends Error {

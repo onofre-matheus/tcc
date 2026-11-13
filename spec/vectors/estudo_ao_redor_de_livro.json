@@ -1,0 +1,22 @@
+{
+  "name": "around de um livro (1.7): os cartões ligados a ele por sinapse (o /cartao da leitura); o que não toca o livro fica de fora",
+  "projection": "study",
+  "now": "2026-11-12T20:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "params": { "around": ["book:b1"] },
+  "events": [
+    { "id": "evt-01", "type": "book.registered", "v": 1, "lc": 1, "ts": "2026-11-12T10:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "Livro", "format": "epub", "sha256": "aaa" } },
+    { "id": "evt-02", "type": "card.created", "v": 2, "lc": 2, "ts": "2026-11-12T10:01:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "do livro", "back": "b", "source_title": "Livro, cap. 1, p. 9", "tags": [] } },
+    { "id": "evt-03", "type": "card.created", "v": 2, "lc": 3, "ts": "2026-11-12T10:02:00Z", "device": "dev-a",
+      "payload": { "card_id": "c2", "front": "fora", "back": "b", "tags": [] } },
+    { "id": "evt-04", "type": "link.created", "v": 1, "lc": 4, "ts": "2026-11-12T10:03:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "book", "id": "b1" }, "to": { "kind": "card", "id": "c1" } } }
+  ],
+  "expected": {
+    "queue": ["c1"],
+    "practice": []
+  }
+}

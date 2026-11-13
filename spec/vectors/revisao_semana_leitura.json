@@ -1,0 +1,30 @@
+{
+  "name": "review agrega leitura (1.7): annotations conta annotation.created por dia; books_read são os livros distintos com progresso ou anotação no dia — e, no total, os distintos na semana (não a soma dos dias); fora da semana não conta",
+  "projection": "review",
+  "now": "2026-11-12T15:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "book.progressed", "v": 1, "lc": 1, "ts": "2026-11-08T15:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b0", "loc": { "chapter": 1, "para": 1 } } },
+    { "id": "evt-02", "type": "annotation.created", "v": 1, "lc": 2, "ts": "2026-11-10T13:00:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a1", "book_id": "b1", "loc": { "chapter": 1, "para": 1 }, "quote": "um" } },
+    { "id": "evt-03", "type": "annotation.created", "v": 1, "lc": 3, "ts": "2026-11-10T13:05:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a2", "book_id": "b1", "loc": { "chapter": 1, "para": 2 }, "quote": "dois", "text": "nota" } },
+    { "id": "evt-04", "type": "annotation.created", "v": 1, "lc": 4, "ts": "2026-11-10T20:00:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a3", "book_id": "b2", "loc": { "chapter": 3, "para": 1 }, "quote": "três" } },
+    { "id": "evt-05", "type": "book.progressed", "v": 1, "lc": 5, "ts": "2026-11-10T21:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "loc": { "chapter": 1, "para": 3 }, "percent": 4 } },
+    { "id": "evt-06", "type": "book.progressed", "v": 1, "lc": 6, "ts": "2026-11-11T12:00:00Z", "device": "dev-b",
+      "payload": { "book_id": "b1", "loc": { "chapter": 2, "para": 1 }, "percent": 9 } }
+  ],
+  "expected": {
+    "week_start": "2026-11-09",
+    "days": {
+      "2026-11-09": { "annotations": 0, "books_read": 0 },
+      "2026-11-10": { "annotations": 3, "books_read": 2 },
+      "2026-11-11": { "annotations": 0, "books_read": 1 }
+    },
+    "totals": { "annotations": 3, "books_read": 2 }
+  }
+}

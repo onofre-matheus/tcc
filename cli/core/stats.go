@@ -1,5 +1,6 @@
 // Consistência de estudo (spec/SPEC.md §4.4) — RF06.
-// Dia estudado = dia local com ≥1 card.reviewed ou session.ended.
+// Dia estudado = dia local com ≥1 card.reviewed, session.ended ou, desde o
+// 1.7, leitura (book.progressed, annotation.created).
 // Streak = dias estudados consecutivos terminando em hoje ou ontem.
 package core
 
@@ -25,7 +26,9 @@ func Stats(events []Event, p Params) (StatsState, error) {
 	reviewsToday := 0
 
 	for _, event := range Normalize(events) {
-		if event.Type != "card.reviewed" && event.Type != "session.ended" {
+		switch event.Type {
+		case "card.reviewed", "session.ended", "book.progressed", "annotation.created":
+		default:
 			continue
 		}
 		day, err := LocalDate(event.TS, p.TZ)

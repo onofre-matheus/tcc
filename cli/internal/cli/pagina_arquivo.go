@@ -127,21 +127,35 @@ func keptAt(err error, path string) error {
 // editor, nano ou vi) e espera fechar. Como no git, o valor passa pelo
 // shell, então "code --wait" funciona.
 func launchEditor(path string) error {
-	editor := firstEnv("PNN_EDITOR", "VISUAL", "EDITOR")
-	if editor == "" {
-		for _, candidate := range []string{"editor", "nano", "vi"} {
-			if _, err := exec.LookPath(candidate); err == nil {
-				editor = candidate
-				break
-			}
-		}
-	}
+	editor := resolveEditor()
 	if editor == "" {
 		return errors.New("nenhum editor encontrado — defina $EDITOR (ex.: export EDITOR=nano)")
 	}
 	cmd := exec.Command("sh", "-c", editor+` "$@"`, editor, path)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+// resolveEditor: o editor que o pnn abre — $PNN_EDITOR, $VISUAL, $EDITOR;
+// senão o primeiro de editor, nano, vi no PATH; "" = nenhum.
+func resolveEditor() string {
+	if editor := firstEnv("PNN_EDITOR", "VISUAL", "EDITOR"); editor != "" {
+		return editor
+	}
+	for _, candidate := range []string{"editor", "nano", "vi"} {
+		if _, err := exec.LookPath(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// resolvePager: o paginador da leitura — $PNN_PAGER, $PAGER ou less.
+func resolvePager() string {
+	if pager := firstEnv("PNN_PAGER", "PAGER"); pager != "" {
+		return pager
+	}
+	return "less"
 }
 
 func firstEnv(names ...string) string {
@@ -243,10 +257,7 @@ func lightBackground() bool {
 // less, com LESS=FRX como o git: texto curto sai direto); fora do terminal,
 // escreve direto.
 func pageOut(a *app.App, text string) error {
-	pager := firstEnv("PNN_PAGER", "PAGER")
-	if pager == "" {
-		pager = "less"
-	}
+	pager := resolvePager()
 	if !stdoutTerminal(a) || pager == "cat" {
 		_, err := io.WriteString(a.Out, text)
 		return err

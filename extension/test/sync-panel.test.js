@@ -101,6 +101,46 @@ describe("painel de sincronização", () => {
     expect(storage.get(CONFIG_KEY).region).toBe("us-east-1");
   });
 
+  it("a senha dos livros: guardada, nunca de volta na tela, preservada em branco", async () => {
+    storage.set(CONFIG_KEY, { ...CREDENCIAL });
+    let panel = await montar();
+    panel.$("syncBookPass").value = "  senha dos livros  ";
+    await panel.salvar();
+    expect(storage.get(CONFIG_KEY).bookPassphrase).toBe("senha dos livros"); // aparada, como na CLI
+
+    panel = await montar();
+    expect(panel.$("syncBookPass").value).toBe("");
+    expect(panel.$("syncBookPass").placeholder).toContain("guardado");
+    expect(panel.container.innerHTML).not.toContain("senha dos livros\"");
+    panel.$("syncRegion").value = "us-east-1";
+    await panel.salvar();
+    expect(storage.get(CONFIG_KEY).bookPassphrase).toBe("senha dos livros");
+  });
+
+  it("Sair deste dispositivo: só aparece configurado, pergunta antes e diz o que conferiu", async () => {
+    let panel = await montar();
+    expect(panel.$("syncLogout").hidden).toBe(true);
+
+    storage.set(CONFIG_KEY, { ...CREDENCIAL });
+    panel = await montar();
+    expect(panel.$("syncLogout").hidden).toBe(false);
+    const logout = vi.spyOn(store, "logout").mockResolvedValue({ verified: 7 });
+
+    vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+    panel.$("syncLogout").click();
+    await vi.waitFor(() => expect(window.confirm).toHaveBeenCalled());
+    expect(logout).not.toHaveBeenCalled();
+
+    window.confirm.mockReturnValueOnce(true);
+    panel.$("syncLogout").click();
+    await vi.waitFor(() => expect(panel.$("syncState").textContent).toContain("navegador limpo — 7 evento(s)"));
+
+    logout.mockRejectedValueOnce(new Error("S3 PUT 503"));
+    window.confirm.mockReturnValueOnce(true);
+    panel.$("syncLogout").click();
+    await vi.waitFor(() => expect(panel.$("syncState").textContent).toContain("nada foi apagado: S3 PUT 503"));
+  });
+
   it("troca o segredo quando um novo é digitado", async () => {
     storage.set(CONFIG_KEY, { ...CREDENCIAL });
     const panel = await montar();

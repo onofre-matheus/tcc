@@ -6,7 +6,7 @@
 import { EventLog } from "../storage/log.js";
 import { chromeArea } from "../storage/kv.js";
 import { uuidv7 } from "../storage/id.js";
-import { sync } from "../storage/sync.js";
+import { sync, verifyOwnObject, remoteOf } from "../storage/sync.js";
 import { s3Bucket } from "../storage/s3.js";
 import { loadSyncConfig } from "../storage/sync_config.js";
 
@@ -23,6 +23,9 @@ import { project as links, cleanNode } from "../core/links.js";
 import { project as studies } from "../core/studies.js";
 import { project as graph } from "../core/graph.js";
 import { project as pages } from "../core/pages.js";
+import { project as books } from "../core/books.js";
+import { sealBook, bookKey } from "../storage/livro_cifra.js";
+import { readEpubInfo } from "./epub.js";
 import { attentionWindowSeconds } from "../core/attention.js";
 
 // Entrada livre de tags e tags efetivas (cartão ∪ deck), para a UI.
@@ -85,6 +88,9 @@ export const state = {
   // Páginas (spec §4.15): { pages, order } — por ora só para rotular o nó
   // `page:` nas conexões; a escrita das páginas é da CLI.
   pages: () => log.project(pages),
+  // Livros (spec §4.16): { books, annotations, order } — a lista do painel e
+  // o rótulo do nó `book:` nas sinapses; ler e anotar é da CLI.
+  books: () => log.project(books),
   // Sessões salvas (spec §4.13): { studies, order }.
   studies: () => log.project(studies),
   // Grafo do acervo (spec §4.14): { nodes, edges }, para a tela de grafo.
@@ -321,13 +327,46 @@ export const logPause = (starts_at, ends_at) =>
 // fica guardado para a UI mostrar sem precisar sincronizar de novo.
 export const SYNC_STATUS_KEY = "sync_status";
 
-export async function syncNow() {
-  const config = await loadSyncConfig();
-  const result = await sync(log, s3Bucket(config), config.prefix);
+// A trava réplica ↔ bucket (SPEC §5, Login e logout): o log que já
+// sincronizou com um bucket não fala com outro — o sync sobe tudo o que este
+// navegador emitiu, e trocar o bucket por baixo levaria os eventos de um para
+// o outro. "Sair deste dispositivo" é o caminho para trocar.
+export const SYNC_REMOTE_KEY = "sync_remote";
+
+async function checkRemote(config) {
+  const bound = (await chrome.storage.local.get(SYNC_REMOTE_KEY))[SYNC_REMOTE_KEY];
+  if (bound && bound !== remoteOf(config)) {
+    throw new Error(`este navegador pertence a ${bound}, e a configuração aponta para ${remoteOf(config)} — o sync levaria os eventos de um bucket para o outro; para trocar de bucket, "Sair deste dispositivo" antes`);
+  }
+}
+
+/** Um ciclo de sync. `deps` troca config e bucket nos testes. */
+export async function syncNow(deps = {}) {
+  const config = deps.config ?? (await loadSyncConfig());
+  await checkRemote(config);
+  const result = await sync(log, deps.bucket ?? s3Bucket(config), config.prefix);
   await chrome.storage.local.set({
+    [SYNC_REMOTE_KEY]: remoteOf(config),
     [SYNC_STATUS_KEY]: { at: new Date().toISOString(), ok: true, ...result },
   });
   return result;
+}
+
+/**
+ * "Sair deste dispositivo" (SPEC §5, Login e logout): sincroniza, CONFERE
+ * que o bucket tem tudo o que este navegador emitiu e só então apaga o log,
+ * a credencial, a configuração e os alarmes. Qualquer falha antes da
+ * conferência lança — e nada é apagado. Entrar de novo é preencher o
+ * formulário do sync, que restaura o log.
+ */
+export async function logout(deps = {}) {
+  const config = deps.config ?? (await loadSyncConfig());
+  const bucket = deps.bucket ?? s3Bucket(config);
+  await syncNow({ config, bucket });
+  const verified = await verifyOwnObject(log, bucket, config.prefix);
+  await chrome.storage.local.clear();
+  await globalThis.chrome?.alarms?.clearAll?.();
+  return { verified };
 }
 
 // Variante para o service worker: nunca lança. Sync é oportunista — o
@@ -342,6 +381,53 @@ export async function syncQuietly() {
     });
     return null;
   }
+}
+
+// --- Livros (catálogo 1.7; SPEC §5, "Livros no bucket") ---
+// O cadastro pela extensão: confere o EPUB, cifra com a senha dos livros e
+// envia ao bucket — só então grava o book.registered (envio que falha não
+// deixa cadastro sem arquivo). A CLI baixa no próximo `pnn sync`.
+
+const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+export class BookPassphraseMissing extends Error {
+  constructor() {
+    super("defina a senha dos livros em Sincronização → Configurar bucket e chave — é ela que cifra o EPUB no bucket (a mesma PNN_LIVROS_SENHA da CLI)");
+    this.name = "BookPassphraseMissing";
+  }
+}
+
+/**
+ * Cadastra o EPUB. `deps` troca config e bucket nos testes.
+ * @returns {{ bookId, title, created: boolean, uploaded: boolean }}
+ */
+export async function registerBook(bytes, fileName, deps = {}) {
+  const info = await readEpubInfo(bytes, fileName);
+  const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
+  const config = deps.config ?? (await loadSyncConfig());
+  if (!config.bookPassphrase) throw new BookPassphraseMissing();
+  const bucket = deps.bucket ?? s3Bucket(config);
+
+  const state = await log.project(books);
+  const existing = Object.entries(state.books).find(([, b]) => b.sha256 === sha256);
+  const bookId = existing?.[0] ?? id("book");
+  const key = bookKey(config.prefix, bookId);
+  if (existing) {
+    // Já cadastrado (aqui ou na CLI): só reenvia se o bucket não tem.
+    const there = (await bucket.list(key)).some((o) => o.key === key);
+    if (!there) await bucket.put(key, await sealBook(config.bookPassphrase, bookId, bytes));
+    return { bookId, title: existing[1].title, created: false, uploaded: !there };
+  }
+  await bucket.put(key, await sealBook(config.bookPassphrase, bookId, bytes));
+  await log.append("book.registered", {
+    book_id: bookId,
+    title: info.title,
+    ...(info.author ? { author: info.author } : {}),
+    format: "epub",
+    sha256,
+  });
+  if (!deps.bucket) await syncQuietly(); // o evento sobe já: a CLI vê no próximo sync
+  return { bookId, title: info.title, created: true, uploaded: true };
 }
 
 export const syncStatus = async () =>

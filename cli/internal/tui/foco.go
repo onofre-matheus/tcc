@@ -48,13 +48,21 @@ type FocoConfig struct {
 	Now  func() time.Time
 	Exec func(run func() error, done func(error) tea.Msg) tea.Cmd
 	// Write liga o modo de escrita (escrita.go): a página aberta num editor
-	// dentro da tela, com o relógio numa barra. StartWriting abre nele quando
-	// a tarefa tem página ligada; senão, Ctrl+O entra.
+	// dentro da tela, com o relógio numa barra. StartWriting abre no que está
+	// ligado à tarefa — a página na escrita, o livro na leitura (com Read);
+	// mais de um, pergunta qual; nenhum, Ctrl+O entra depois.
 	Write        WriteActions
 	StartWriting bool
-	// Standalone é o `pnn escrever`: só o editor, sem sessão de foco — sem
-	// session.started, sem relógio, sem pausa; Esc sai.
+	// Standalone é o `pnn escrever` (e o `pnn ler`): só o editor ou o livro,
+	// sem sessão de foco — sem session.started, sem relógio, sem pausa; Esc
+	// sai.
 	Standalone bool
+	// Read liga o modo de leitura (leitura.go): o livro aberto na tela, com
+	// os comandos "/" para anotar. Books são os livros ligados à tarefa (no
+	// `pnn ler`, o livro aberto); StartReading abre o primeiro.
+	Read         ReadActions
+	Books        []LinkedBook
+	StartReading bool
 }
 
 // LinkedPage é uma página ligada à tarefa por sinapse (catálogo 1.6).
@@ -95,7 +103,7 @@ const (
 	// focoPauseDone: a pausa tocou e já está gravada; a tela espera a escolha
 	// — Enter volta à tarefa, q sai. O relógio fica parado até lá.
 	focoPauseDone
-	focoPickPage // Ctrl+E com mais de uma página ligada: qual abrir
+	focoPickPage // Ctrl+E ou Ctrl+O com mais de uma coisa ligada: qual abrir
 )
 
 // Durações de pausa oferecidas no break ([1]..[5]).
@@ -120,7 +128,9 @@ type Foco struct {
 	editing      *editState  // $EDITOR aberto (Ctrl+E); nil fora dele
 	write        *writeState // página carregada no modo de escrita
 	writing      bool        // a tela está no modo de escrita
-	palette      *palette    // comandos "/" abertos (na escrita ou no relógio grande)
+	palette      *palette    // comandos "/" abertos (na escrita, na leitura ou no relógio grande)
+	read         *readState  // livro carregado no modo de leitura
+	reading      bool        // a tela está no modo de leitura
 	pickWrite    bool        // o seletor de página é para escrever, não para o $EDITOR
 	height       int
 }
@@ -159,11 +169,16 @@ func NewFoco(cfg FocoConfig) Foco {
 		timer:     newCountdown(cfg.Minutes),
 		input:     input,
 	}
+	if cfg.Read != nil && cfg.StartReading && len(cfg.Books) > 0 {
+		if err := m.enterRead(cfg.Books[0]); err != nil {
+			m.Err = err // o `pnn ler` sem o livro não tem o que mostrar
+		}
+	}
 	if cfg.Write != nil && cfg.StartWriting {
-		switch len(cfg.Pages) {
+		switch items := m.linked(); len(items) {
 		case 0:
 		case 1:
-			m.enterWrite(cfg.Pages[0])
+			m.openLinked(items[0])
 		default:
 			m.phase, m.pickWrite = focoPickPage, true
 		}
@@ -195,6 +210,9 @@ func (m Foco) emitStarted() error {
 }
 
 func (m Foco) Init() tea.Cmd {
+	if m.Err != nil { // o livro não abriu
+		return tea.Quit
+	}
 	if m.cfg.Standalone {
 		return textinput.Blink
 	}
@@ -213,6 +231,10 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.resizeEditor()
+		if m.read != nil {
+			m.relayoutRead()
+			m.show(true)
+		}
 		return m, nil
 
 	case tickMsg:
@@ -280,6 +302,9 @@ func (m Foco) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case focoPickPage:
 			return m.updatePickPage(msg)
 		}
+		if m.reading {
+			return m.updateReading(msg)
+		}
 		if m.writing {
 			return m.updateWriting(msg)
 		}
@@ -341,21 +366,17 @@ func (m Foco) updateRunning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyCtrlO:
-		// Escreve na página dentro da própria tela (modo de escrita).
+		// Abre o que está ligado à tarefa dentro da própria tela: a página na
+		// escrita, o livro na leitura.
 		if m.cfg.Write == nil {
 			return m, nil
 		}
-		switch len(m.cfg.Pages) {
+		switch len(m.linked()) {
 		case 0: // sem página: os comandos já com /pagina, um Enter cria e escreve
 			m.openPalette(strings.TrimSpace("pagina " + m.cfg.TaskTitle))
 			return m, nil
 		case 1:
-			if m.write != nil && m.write.page.ID == m.cfg.Pages[0].ID {
-				m.writing = true
-				m.resizeEditor()
-				return m, m.write.editor.Focus()
-			}
-			return m, m.enterWrite(m.cfg.Pages[0])
+			return m, m.openLinked(m.linked()[0])
 		default:
 			m.phase, m.pickWrite = focoPickPage, true
 			return m, nil
@@ -482,6 +503,9 @@ func (m *Foco) completeBlock(notify bool) error {
 	if m.writing {
 		m.saveWrite(true) // o texto não espera a pausa
 	}
+	if m.reading {
+		m.saveProgress() // nem o "onde parei"
+	}
 	if err := m.emitEnded("completed", ""); err != nil {
 		return err
 	}
@@ -579,12 +603,16 @@ func (m Foco) updatePickPage(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if key := msg.String(); len(key) == 1 && key >= "1" && key <= "9" {
-		if i := int(key[0] - '1'); i < len(m.cfg.Pages) {
-			m.phase = focoRunning
-			if m.pickWrite {
-				m.pickWrite = false
-				return m, m.enterWrite(m.cfg.Pages[i])
+		i := int(key[0] - '1')
+		if m.pickWrite {
+			if items := m.linked(); i < len(items) {
+				m.phase, m.pickWrite = focoRunning, false
+				return m, m.openLinked(items[i])
 			}
+			return m, nil
+		}
+		if i < len(m.cfg.Pages) {
+			m.phase = focoRunning
 			return m.openPage(m.cfg.Pages[i])
 		}
 	}
@@ -746,6 +774,9 @@ func (m Foco) View() string {
 		return b.String()
 	}
 
+	if m.reading && m.read != nil && (m.phase == focoRunning || m.phase == focoCheckin) {
+		return m.readView()
+	}
 	if m.writing && m.write != nil && (m.phase == focoRunning || m.phase == focoCheckin) {
 		return m.writeView()
 	}
@@ -759,10 +790,10 @@ func (m Foco) View() string {
 	b.WriteString("\n\n")
 	b.WriteString(bigClock(m.timer, "FOCO", redTimer, m.width))
 	b.WriteString("\n\n")
-	if len(m.cfg.Pages) > 0 {
-		titles := make([]string, len(m.cfg.Pages))
-		for i, p := range m.cfg.Pages {
-			titles[i] = "página " + p.Title
+	if items := m.linkedAll(); len(items) > 0 {
+		titles := make([]string, len(items))
+		for i, it := range items {
+			titles[i] = it.label()
 		}
 		b.WriteString(" ⚡ " + strings.Join(titles, " · ") + "\n")
 	}
@@ -771,15 +802,25 @@ func (m Foco) View() string {
 	}
 	switch m.phase {
 	case focoPickPage:
-		if m.pickWrite {
+		var opts []string
+		switch {
+		case m.pickWrite && len(m.cfg.Books) > 0 && m.cfg.Read != nil:
+			b.WriteString(" ✎ Abrir o quê?\n")
+			for i, it := range m.linked() {
+				if i < 9 {
+					opts = append(opts, fmt.Sprintf("[%d] %s", i+1, it.label()))
+				}
+			}
+		case m.pickWrite:
 			b.WriteString(" ✎ Em qual página escrever?\n")
-		} else {
+		default:
 			b.WriteString(" ✎ Qual página editar no $EDITOR?\n")
 		}
-		var opts []string
-		for i, p := range m.cfg.Pages {
-			if i < 9 {
-				opts = append(opts, fmt.Sprintf("[%d] %s", i+1, p.Title))
+		if len(opts) == 0 {
+			for i, p := range m.cfg.Pages {
+				if i < 9 {
+					opts = append(opts, fmt.Sprintf("[%d] %s", i+1, p.Title))
+				}
 			}
 		}
 		b.WriteString(" " + dim.Render(strings.Join(opts, " · ")+" · Esc volta") + "\n")
@@ -801,6 +842,8 @@ func (m Foco) View() string {
 		// que vem no fim é justamente o que é novo para o usuário.
 		help := "Enter grava e limpa · Esc encerra · Ctrl+P pausa"
 		switch {
+		case m.cfg.Write != nil && m.cfg.Read != nil && len(m.cfg.Books) > 0:
+			help = "Enter anota · / comandos · Ctrl+O abre · Ctrl+P pausa · Esc encerra"
 		case m.cfg.Write != nil:
 			help = "Enter anota · / comandos · Ctrl+O escreve · Ctrl+P pausa · Esc encerra"
 		case len(m.cfg.Pages) > 0:

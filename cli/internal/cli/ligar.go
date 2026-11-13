@@ -1,12 +1,12 @@
 // Sinapses — as conexões explícitas (catálogo 1.4, spec §3 e §4.12), estilo
 // Obsidian; o nome nas telas vem do 1.6: cartões e páginas são os neurônios,
 // a sinapse é a ligação entre eles. `pnn ligar A B` cria uma sinapse entre
-// duas coisas (cartão, página, tarefa, deck); com uma "#tag" de um lado, classifica o
+// duas coisas (cartão, página, tarefa, deck, livro); com uma "#tag" de um lado, classifica o
 // cartão ou a página (a tag não é ponta de sinapse). `pnn desligar` desfaz e
 // `pnn sinapses [A]` mostra o grafo local. Um nó é o número da última tela,
-// uma "#tag", o nome exato de um deck ou o título de uma página (sem caixa
-// nem acento); sem "#", um nome que não é deck nem página vale como tag se
-// ela já existir.
+// uma "#tag", o nome exato de um deck ou o título de uma página ou de um
+// livro (sem caixa nem acento); sem "#", um nome que não é deck, página nem
+// livro vale como tag se ela já existir.
 package cli
 
 import (
@@ -33,6 +33,7 @@ type graph struct {
 	tags    core.TagsState
 	pages   core.PagesState
 	tasks   core.TasksState
+	books   core.BooksState
 }
 
 func loadGraph(a *app.App) (graph, error) {
@@ -54,6 +55,9 @@ func loadGraph(a *app.App) (graph, error) {
 		return g, err
 	}
 	if g.pages, err = core.Pages(g.events); err != nil {
+		return g, err
+	}
+	if g.books, err = core.Books(g.events); err != nil {
 		return g, err
 	}
 	g.tasks, err = core.Tasks(g.events)
@@ -95,9 +99,13 @@ func (g graph) resolve(a *app.App, arg string) (core.Node, error) {
 			if _, ok := g.tasks.Tasks[ref.ID]; !ok {
 				return core.Node{}, fmt.Errorf("a tarefa não existe mais — rode `pnn dia`")
 			}
+		case core.NodeBook:
+			if _, ok := g.books.Books[ref.ID]; !ok {
+				return core.Node{}, fmt.Errorf("o livro não existe mais — rode `pnn livros`")
+			}
 		case core.NodeTag:
 		default:
-			return core.Node{}, fmt.Errorf("o item %d da última tela não se liga — só cartões (pnn cartas), páginas (pnn paginas), tarefas (pnn dia), decks (pnn decks) e tags (pnn tags)", n)
+			return core.Node{}, fmt.Errorf("o item %d da última tela não se liga — só cartões (pnn cartas), páginas (pnn paginas), tarefas (pnn dia), livros (pnn livros), decks (pnn decks) e tags (pnn tags)", n)
 		}
 		return core.Node{Kind: ref.Kind, ID: ref.ID}, nil
 	}
@@ -126,10 +134,62 @@ func (g graph) resolve(a *app.App, arg string) (core.Node, error) {
 	} else if id != "" {
 		return core.Node{Kind: core.NodePage, ID: id}, nil
 	}
+	if id, err := g.bookByTitle(arg); err != nil {
+		return core.Node{}, err
+	} else if id != "" {
+		return core.Node{Kind: core.NodeBook, ID: id}, nil
+	}
 	if tag != "" && g.knownTag(tag) {
 		return core.Node{Kind: core.NodeTag, ID: tag}, nil
 	}
-	return core.Node{}, fmt.Errorf("%q não é número da última tela, deck, página nem tag conhecida — tag nova vai com # entre aspas: '#%s'", arg, tag)
+	// Título de livro costuma ser longo: um trecho que case com um livro só
+	// basta — depois das tags, para não roubar o nome de uma.
+	if id, err := g.bookByWords(arg); err != nil {
+		return core.Node{}, err
+	} else if id != "" {
+		return core.Node{Kind: core.NodeBook, ID: id}, nil
+	}
+	return core.Node{}, fmt.Errorf("%q não é número da última tela, deck, página, livro nem tag conhecida — tag nova vai com # entre aspas: '#%s'", arg, tag)
+}
+
+// bookByWords: o único livro não arquivado com todas as palavras no título.
+func (g graph) bookByWords(arg string) (string, error) {
+	words := strings.Fields(fold(arg))
+	if len(words) == 0 {
+		return "", nil
+	}
+	var ids []string
+	for _, id := range g.books.Order {
+		if containsAll(fold(g.books.Books[id].Title), words) {
+			ids = append(ids, id)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", nil
+	case 1:
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("%d livros casam com %q — use o número de `pnn livros`", len(ids), arg)
+}
+
+// bookByTitle: o livro não arquivado com esse título exato, sem caixa nem
+// acento — como pageByTitle.
+func (g graph) bookByTitle(arg string) (string, error) {
+	want := strings.Join(strings.Fields(fold(arg)), " ")
+	var ids []string
+	for _, id := range g.books.Order {
+		if fold(g.books.Books[id].Title) == want {
+			ids = append(ids, id)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", nil
+	case 1:
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("%d livros se chamam %q — use o número de `pnn livros`", len(ids), arg)
 }
 
 // pageByTitle: a página não arquivada com esse título exato, sem caixa nem
@@ -163,7 +223,7 @@ func compareBool(x, y bool) int {
 }
 
 // label é o rótulo humano do nó: frente do cartão, "deck Nome", "#tag",
-// "página Título" ou "tarefa Título".
+// "página Título", "tarefa Título" ou "livro Título".
 func (g graph) label(n core.Node) string {
 	switch n.Kind {
 	case core.NodeCard:
@@ -196,6 +256,16 @@ func (g graph) label(n core.Node) string {
 		label := "tarefa " + truncate(task.Title, 50)
 		if task.Done {
 			label += " ✔"
+		}
+		return label
+	case core.NodeBook:
+		book, ok := g.books.Books[n.ID]
+		if !ok {
+			return n.Key()
+		}
+		label := "livro " + truncate(book.Title, 50)
+		if book.Archived {
+			label += " (arquivado)"
 		}
 		return label
 	}
@@ -308,6 +378,9 @@ func pairKind(x, y core.Node) (item core.Node, tag string, classify bool, err er
 	}
 	if item.Kind == core.NodeTask {
 		return core.Node{}, "", false, fmt.Errorf("tarefa não tem tags — para dar contexto à tarefa, ligue-a a uma página")
+	}
+	if item.Kind == core.NodeBook {
+		return core.Node{}, "", false, fmt.Errorf("livro não tem tags — para dizer do que ele trata, ligue-o a uma página do assunto")
 	}
 	return item, tag, true, nil
 }

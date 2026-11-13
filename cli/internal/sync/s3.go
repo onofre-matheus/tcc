@@ -13,18 +13,44 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go/logging"
 )
 
-// Config vem do ambiente. As credenciais seguem a cadeia padrão da AWS
-// (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, ~/.aws/credentials, AWS_PROFILE),
-// então nada de segredo passa pelo ~/.pnn nem por flag na linha de comando.
+// Config vem do ambiente ou, com `pnn login`, do login.json da réplica. Sem
+// login, as credenciais seguem a cadeia padrão da AWS (AWS_ACCESS_KEY_ID/
+// AWS_SECRET_ACCESS_KEY, ~/.aws/credentials, AWS_PROFILE); com login, vão
+// explícitas (AccessKeyID…) e a cadeia do shell não vale — no aparelho de
+// trabalho, a credencial é a da sessão, que o logout apaga.
 type Config struct {
 	Bucket   string // PNN_S3_BUCKET (obrigatório)
 	Prefix   string // PNN_S3_PREFIX (padrão "pnn/")
 	Endpoint string // PNN_S3_ENDPOINT (opcional: R2, MinIO, Backblaze…)
 	Region   string // PNN_S3_REGION (padrão AWS_REGION, ou us-east-1)
+	// BookPassphrase (PNN_LIVROS_SENHA) cifra os EPUBs no bucket (SPEC §5,
+	// Livros no bucket). Opcional: sem ela, os eventos sincronizam e os
+	// livros esperam.
+	BookPassphrase string
+
+	// Credencial explícita (do login); vazia = cadeia padrão da AWS.
+	AccessKeyID, SecretAccessKey, SessionToken string
+}
+
+// Remote é a identidade do bucket para a trava réplica ↔ bucket (SPEC §5,
+// Login e logout): endpoint, bucket e prefixo, normalizados. A região não
+// entra — o mesmo bucket não muda de dono por ela.
+func (c Config) Remote() string {
+	endpoint := strings.ToLower(strings.TrimRight(strings.TrimSpace(c.Endpoint), "/"))
+	endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://")
+	if endpoint == "" {
+		endpoint = "aws"
+	}
+	prefix := c.Prefix
+	if prefix == "" {
+		prefix = "pnn/"
+	}
+	return "s3://" + endpoint + "/" + c.Bucket + "/" + prefix
 }
 
 // defaultRegion é o último recurso: nem PNN_S3_REGION nem a cadeia da AWS
@@ -46,6 +72,10 @@ func ConfigFromEnv() (Config, error) {
 		Prefix:   os.Getenv("PNN_S3_PREFIX"),
 		Endpoint: os.Getenv("PNN_S3_ENDPOINT"),
 		Region:   os.Getenv("PNN_S3_REGION"),
+
+		// aparada, como a extensão faz com todo campo da configuração: a mesma
+		// senha tem de abrir dos dois lados
+		BookPassphrase: strings.TrimSpace(os.Getenv("PNN_LIVROS_SENHA")),
 	}
 	if cfg.Bucket == "" {
 		return Config{}, ErrNotConfigured
@@ -78,6 +108,15 @@ func NewBucket(ctx context.Context, cfg Config) (Bucket, error) {
 	opts := []func(*config.LoadOptions) error{config.WithLogger(logging.Nop{})}
 	if cfg.Region != "" {
 		opts = append(opts, config.WithRegion(cfg.Region))
+	}
+	if cfg.AccessKeyID != "" {
+		// Credencial do login: explícita, vence a do shell; sem região no
+		// login, o padrão — não a do ambiente de quem está no aparelho.
+		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			cfg.AccessKeyID, cfg.SecretAccessKey, cfg.SessionToken)))
+		if cfg.Region == "" {
+			opts = append(opts, config.WithRegion(defaultRegion))
+		}
 	}
 	aws0, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
@@ -152,6 +191,9 @@ func (b *s3Bucket) Put(ctx context.Context, key string, body []byte) (string, er
 // para nenhum cliente HTTP descomprimir por conta própria — quem lê decide
 // pelo número mágico).
 func contentType(key string) string {
+	if strings.HasSuffix(key, BookSuffix) {
+		return "application/octet-stream" // o livro cifrado: bytes opacos
+	}
 	if strings.HasSuffix(key, zstdSuffix) {
 		return "application/zstd"
 	}

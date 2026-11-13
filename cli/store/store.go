@@ -130,6 +130,21 @@ func (s *Store) deviceIDLocked() (string, error) {
 	return device, nil
 }
 
+// InitDevice fixa o id do dispositivo, se a réplica ainda não tem um — o
+// login dá a uma réplica vazia o id estável da máquina, para logout e login
+// reusarem o mesmo objeto do bucket. Já existindo, nada muda.
+func (s *Store) InitDevice(id string) error {
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if raw, err := os.ReadFile(s.path("device")); err == nil && len(raw) > 0 {
+		return nil
+	}
+	return os.WriteFile(s.path("device"), []byte(id), 0o644)
+}
+
 // Append emite um evento local (payload v1): lc = max(lc do log) + 1,
 // id/ts do dispositivo.
 func (s *Store) Append(eventType string, payload any) (core.Event, error) {

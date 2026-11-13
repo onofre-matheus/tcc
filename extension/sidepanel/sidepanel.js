@@ -13,7 +13,7 @@ let review = null; // { queue, practiceFrom, index, cards, decks, deckId, reveal
 let selectedDeck = null; // deck do formulário de cartão: null = ainda não escolhido; "" = (sem deck)
 let dayTasks = { tasks: {}, day_list: [] }; // para o seletor de tarefa do foco
 // Último retrato do acervo (refresh): nomeia os nós do grafo de conexões.
-let graph = { cards: {}, decks: {}, pages: {}, tasks: {}, links: { links: {}, neighbors: {}, nodes: [] } };
+let graph = { cards: {}, decks: {}, pages: {}, tasks: {}, books: {}, links: { links: {}, neighbors: {}, nodes: [] } };
 const nodeByLabel = new Map(); // rótulo da sugestão → "kind:id"
 
 // Check-in de atenção (self-monitoring, Safren): o alarme dispara no service
@@ -356,8 +356,8 @@ $("reveal").onclick = async () => {
 const truncate = (s, max) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join("")}…` : String(s));
 
 // Rótulo humano do nó: frente do cartão, "deck Nome", "#tag", "página
-// Título" ou "tarefa Título" (páginas e tarefas como ponta de sinapse,
-// catálogo 1.6; as ligações com elas são feitas na CLI).
+// Título", "tarefa Título" ou "livro Título" (páginas e tarefas como ponta de
+// sinapse, catálogo 1.6; livros, 1.7; as ligações com elas são feitas na CLI).
 function nodeLabel(key) {
   const n = store.parseNode(key);
   if (!n) return key;
@@ -367,6 +367,10 @@ function nodeLabel(key) {
   if (n.kind === "task") {
     const task = graph.tasks[n.id];
     return task ? `tarefa ${truncate(task.title, 50)}${task.done ? " ✔" : ""}` : key;
+  }
+  if (n.kind === "book") {
+    const book = graph.books[n.id];
+    return book ? `livro ${truncate(book.title, 50)}${book.archived ? " (arquivado)" : ""}` : key;
   }
   return `#${n.id}`;
 }
@@ -726,8 +730,8 @@ function renderTags(tg, lk) {
 
 // Sugestões de nó (cartões ativos, decks ativos, tags) para "conectar a…" e
 // o seletor "ao redor de" da revisão, com os nós que têm conexão.
-function renderGraph(lt, dk, tg, lk, pg, tk) {
-  graph = { cards: lt.cards, decks: dk.decks, pages: pg.pages, tasks: tk.tasks, links: lk };
+function renderGraph(lt, dk, tg, lk, pg, tk, bk) {
+  graph = { cards: lt.cards, decks: dk.decks, pages: pg.pages, tasks: tk.tasks, books: bk.books, links: lk };
   nodeByLabel.clear();
   for (const [id, c] of Object.entries(lt.cards)) {
     if (!c.archived && !(c.deck_id && dk.decks[c.deck_id]?.archived)) nodeByLabel.set(`cartão: ${c.front}`, `card:${id}`);
@@ -867,12 +871,14 @@ async function renderWeek() {
     if (d.pause_minutes) parts.push(`${d.pause_minutes} min pausa`);
     if (d.completed || d.interrupted) parts.push(`${d.completed}✔ ${d.interrupted}✗`);
     if (d.checkins) parts.push(`na tarefa ${d.checkins_on_task}/${d.checkins}`);
+    if (d.books_read) parts.push(`📖 ${d.books_read}${d.annotations ? ` · ${d.annotations} anot.` : ""}`);
     return `<div class="deck"><span class="grow">${wd} ${brDate(day)}</span>
       <span class="count">${parts.join(" · ") || "—"}</span></div>`;
   });
 
   const t = w.totals;
-  const totCheckins = t.checkins ? ` · na tarefa ${t.checkins_on_task}/${t.checkins}` : "";
+  const totCheckins = (t.checkins ? ` · na tarefa ${t.checkins_on_task}/${t.checkins}` : "") +
+    (t.books_read ? ` · 📖 ${plural(t.books_read, "livro", "livros")}, ${t.annotations} anot.` : "");
   rows.push(`<div class="deck"><span class="grow"><b>total</b></span>
     <span class="count">${t.focus_minutes} min foco · ${t.reviews} rev. · ${t.pause_minutes} min pausa · ${t.completed}✔ ${t.interrupted}✗${totCheckins}</span></div>`);
 
@@ -886,6 +892,55 @@ async function renderWeek() {
 }
 $("weekPrev").onclick = () => { weekOffset++; renderWeek(); };
 $("weekNext").onclick = () => { if (weekOffset > 0) { weekOffset--; renderWeek(); } };
+
+// ---------- Livros (catálogo 1.7) ----------
+// Ler e anotar é da CLI (`pnn ler`); aqui se cadastra o EPUB — conferido,
+// cifrado com a senha dos livros e enviado ao bucket — e se veem as anotações.
+
+function renderBooks(bk) {
+  const list = $("bookList");
+  if (!bk.order.length) {
+    list.innerHTML = `<div class="meta">nenhum livro — cadastre um EPUB; na CLI, <code>pnn livro arquivo.epub</code></div>`;
+    return;
+  }
+  list.innerHTML = bk.order.map((id) => {
+    const b = bk.books[id];
+    const meta = [
+      b.progress ? (b.progress_percent !== null ? `${b.progress_percent}%` : "começado") : "não começado",
+      b.annotations.length ? plural(b.annotations.length, "anotação", "anotações") : "",
+    ].filter(Boolean).join(" · ");
+    const notes = b.annotations.map((aid) => {
+      const a = bk.annotations[aid];
+      const where = a.loc.page ? `p. ${esc(a.loc.page)}` : `seção ${a.loc.chapter}`;
+      return `<div class="meta" style="margin: 4px 0 0 8px">${a.text ? "✎" : "▍"} “${esc(truncate(a.quote, 140))}” <span class="count">${where}</span>` +
+        (a.text ? `<div style="margin-left: 14px">${esc(a.text)}</div>` : "") + `</div>`;
+    }).join("");
+    const title = `${esc(b.title)}${b.author ? ` <span class="meta">— ${esc(b.author)}</span>` : ""}`;
+    return b.annotations.length
+      ? `<details class="deck"><summary><span class="grow">${title}</span> <span class="count">${meta}</span></summary>${notes}</details>`
+      : `<div class="deck"><span class="grow">${title}</span><span class="count">${meta}</span></div>`;
+  }).join("");
+}
+
+$("bookFile").onchange = async () => {
+  const input = $("bookFile");
+  const file = input.files?.[0];
+  if (!file) return;
+  const msg = $("bookMsg");
+  msg.textContent = "conferindo, cifrando e enviando…";
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const r = await store.registerBook(bytes, file.name);
+    msg.textContent = r.created
+      ? `📖 cadastrado: ${r.title} — o pnn sync da CLI traz o arquivo`
+      : `📖 já cadastrado: ${r.title}${r.uploaded ? " — arquivo enviado ao bucket" : ""}`;
+  } catch (error) {
+    msg.textContent = `⚠ ${error.message ?? error}`;
+  } finally {
+    input.value = "";
+  }
+  await refresh();
+};
 
 // Seletor de tarefa do foco: a lista do dia (A→B→C), preservando a seleção.
 function renderFocusTasks(t) {
@@ -906,10 +961,11 @@ function renderFocusTasks(t) {
 
 // ---------- Refresh geral ----------
 async function refresh() {
-  const [s, inb, dk, lt, tk, mins, tg, lk, st, pg] = await Promise.all([
+  const [s, inb, dk, lt, tk, mins, tg, lk, st, pg, bk] = await Promise.all([
     store.state.stats(), store.state.inbox(), store.state.decks(),
     store.state.leitner(), store.state.tasks(), store.state.attentionMinutes(),
     store.state.tags(), store.state.links(), store.state.studies(), store.state.pages(),
+    store.state.books(),
   ]);
   lastInbox = inb;
   const flame = s.streak > 0 ? "🔥" : "•";
@@ -920,7 +976,8 @@ async function refresh() {
   renderInbox(inb);
   renderDecks(dk, lt);
   renderTags(tg, lk);
-  renderGraph(lt, dk, tg, lk, pg, tk);
+  renderGraph(lt, dk, tg, lk, pg, tk, bk);
+  renderBooks(bk);
   renderStudies(st);
   await renderWeek();
   await updateReviewButton();

@@ -180,18 +180,26 @@ func (w writeActions) Tag(pageID string, add, remove []string) (string, error) {
 	return "🏷 tags da página: " + hashTags(next), nil
 }
 
-// Search: páginas e cartões com todas as palavras, como o `pnn buscar` — sem
-// o próprio nó; até 9, que é o que o seletor numera.
+// Search: páginas e cartões com todas as palavras, como o `pnn buscar`, e os
+// livros com elas no título — sem o próprio nó; até 9, que é o que o
+// seletor numera.
 func (w writeActions) Search(excludeID, query string) ([]tui.Choice, error) {
 	g, err := loadGraph(w.a)
 	if err != nil {
 		return nil, err
 	}
-	pageIDs, cardIDs := searchAcervo(g, strings.Fields(fold(query)))
+	words := strings.Fields(fold(query))
+	pageIDs, cardIDs := searchAcervo(g, words)
 	var out []tui.Choice
 	for _, id := range pageIDs {
 		if id != excludeID {
 			out = append(out, tui.Choice{Kind: core.NodePage, ID: id, Label: g.label(pageNode(id))})
+		}
+	}
+	for _, id := range g.books.Order {
+		if id != excludeID && containsAll(fold(g.books.Books[id].Title), words) {
+			node := core.Node{Kind: core.NodeBook, ID: id}
+			out = append(out, tui.Choice{Kind: core.NodeBook, ID: id, Label: g.label(node)})
 		}
 	}
 	for _, id := range cardIDs {

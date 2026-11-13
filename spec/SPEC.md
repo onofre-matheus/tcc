@@ -43,7 +43,7 @@ estado projetado (**convergência**), e eventos duplicados não alteram o
 resultado (**idempotência**). Vetores com `"permutations": true` verificam isso
 embaralhando a entrada.
 
-## 3. Catálogo de eventos (v1.6)
+## 3. Catálogo de eventos (v1.7)
 
 O catálogo 1.1 acrescentou ao 1.0 os eventos de **edição e arquivamento**; o
 1.2, **pausas e o motivo de interrupção** (marcados ▸ nas tabelas;
@@ -51,7 +51,8 @@ O catálogo 1.1 acrescentou ao 1.0 os eventos de **edição e arquivamento**; o
 sem deck e treino fora do vencimento** (marcados "(1.3)"; `card.created`
 ganhou v2 de payload); o 1.4, **conexões explícitas e renomeação de tag**
 (marcados "(1.4)"); o 1.5, **sessões de estudo salvas** (marcados "(1.5)");
-o 1.6, **páginas** — anotações longas de consulta (marcados "(1.6)").
+o 1.6, **páginas** — anotações longas de consulta (marcados "(1.6)"); o 1.7,
+**livros** — leitura e anotação de EPUB (marcados "(1.7)").
 As adições são compatíveis —
 clientes antigos continuam válidos: **tipos de evento desconhecidos são
 ignorados pelas projeções**, sem interromper o processamento (vetor
@@ -152,10 +153,11 @@ começa com `t + "/"` (`so` inclui `so/concorrencia`, não `sobre`).
 são os neurônios, a sinapse é a ligação entre eles — é uma aresta explícita
 entre dois **nós**, criada pelo usuário — o
 `[[link]]` do Obsidian como evento: o texto do cartão não é varrido em busca
-de links. Nó = `{kind, id}` com `kind ∈ card | deck | tag | page | task`
-(`page` e `task` desde o 1.6); o `id` da tag é o nome normalizado (é por isso
-que a tag não tem `tag_id`). Na saída das projeções o nó vira a chave
-`"kind:id"` (`card:c1`, `deck:d1`, `tag:so/threads`, `page:p1`, `task:t1`).
+de links. Nó = `{kind, id}` com `kind ∈ card | deck | tag | page | task |
+book` (`page` e `task` desde o 1.6, `book` desde o 1.7); o `id` da tag é o
+nome normalizado (é por isso que a tag não tem `tag_id`). Na saída das
+projeções o nó vira a chave `"kind:id"` (`card:c1`, `deck:d1`,
+`tag:so/threads`, `page:p1`, `task:t1`, `book:b1`).
 
 - A aresta guarda a direção (`from → to`) porque `relation` pode ser
   direcional (`prerequisito`: *from* é pré-requisito de *to*); a vizinhança é
@@ -163,10 +165,11 @@ que a tag não tem `tag_id`). Na saída das projeções o nó vira a chave
   `card.explained`; ausente = conexão simples.
 - `link.created` é **ignorado** se algum nó for inválido: `kind` desconhecido
   (um tipo de nó novo entra como `kind` novo, e clientes antigos o ignoram),
-  `id` vazio (inclusive tag que normaliza para vazia), cartão, deck, página
-  ou tarefa inexistente naquela posição da ordem total (§3: referência a id
-  inexistente); tag sempre existe. A página existe a partir de um
-  `page.created` válido (§3, Páginas: com título; o primeiro vence); a
+  `id` vazio (inclusive tag que normaliza para vazia), cartão, deck, página,
+  tarefa ou livro inexistente naquela posição da ordem total (§3: referência
+  a id inexistente); tag sempre existe. A página existe a partir de um
+  `page.created` válido (§3, Páginas: com título; o primeiro vence); o
+  livro, de um `book.registered` válido (§3, Livros: com título); a
   tarefa, do `task.created` até o `task.deleted`. Laço (`from` = `to`)
   também é ignorado.
 - `link.removed` é **tombstone** da conexão. Duas conexões do mesmo par
@@ -180,6 +183,12 @@ que a tag não tem `tag_id`). Na saída das projeções o nó vira a chave
 - **Tarefa (1.6)**: tarefa não tem descrição (§3, Organização) — o contexto
   dela é uma página ligada por sinapse, que a sessão de foco mostra e deixa
   editar.
+- **Livro (1.7)**: a tarefa ligada a um livro ("ler o capítulo 3") abre o
+  livro na sessão de foco; o cartão criado na leitura nasce ligado ao livro,
+  e estudar ao redor do livro (§4.11) reúne esses cartões. Arquivar o livro
+  não remove as conexões. Livro não tem tags — como na tarefa, as
+  superfícies recusam ligar livro a tag; o assunto do livro é uma página
+  ligada a ele.
 - **Página (1.6)**: tags e conexões de página são metadado, criados por
   evento como os dos cartões — o corpo nunca é varrido. A página é o lugar
   onde o usuário **vê** o que está ligado a ela, não onde escreve as
@@ -263,6 +272,65 @@ superfície.
   `base` — valha também para o histórico. Ausente = base desconhecida.
 - `page.archived` tira a página da lista preservando o texto
   (`archived: true`), como o cartão; edições posteriores continuam valendo.
+
+### Livros (1.7)
+
+| Tipo | Payload |
+|---|---|
+| `book.registered` (1.7) | `book_id, title, author?, format, sha256` |
+| `book.edited` (1.7) | `book_id, title?, author?` |
+| `book.archived` (1.7) | `book_id` |
+| `book.progressed` (1.7) | `book_id, loc, percent?, session_id?` |
+| `annotation.created` (1.7) | `annotation_id, book_id, loc, quote, text?` |
+| `annotation.edited` (1.7) | `annotation_id, text` |
+| `annotation.deleted` (1.7) | `annotation_id` |
+
+**Livro** é a identidade de um arquivo que o usuário lê: título, autor,
+`format` (`"epub"`; campo **aberto** — outro formato entra como valor novo) e
+o `sha256` do conteúdo. **O arquivo não é evento**: cada cliente o guarda na
+própria pasta (na CLI, `~/.pnn/livros/<book_id>.epub`), e ele viaja pelo
+bucket **cifrado**, fora do log (§5, Livros no bucket). O `sha256` é o que
+confere o arquivo que chega e reconhece o mesmo arquivo cadastrado de novo.
+
+**Posição** (`loc`) = `{ chapter, para, page? }`: `chapter` é a posição
+1-based do documento no *spine* do EPUB (vem do arquivo; é estável),
+`para` é o bloco 1-based dentro dele (parágrafo, título, item, citação — a
+divisão é do extrator do cliente) e `page` é o rótulo da página da edição
+impressa, quando o EPUB a traz (`pagebreak`/`page-list`); serve para citar.
+`chapter` e `para` precisam ser inteiros entre 1 e 10⁹; `page` só vale se
+for texto não vazio. Posição inválida invalida o evento.
+
+**Anotação** aponta para uma posição e guarda o **trecho citado** (`quote`)
+— o modelo do W3C Web Annotation: um seletor de posição e um de citação. A
+posição depende do extrator; o trecho reancora a anotação quando o parágrafo
+muda de lugar (outra edição, outro extrator) — reancorar é papel da
+superfície, não da projeção. Sem `text`, a anotação é um **grifo**; com, uma
+**nota**.
+
+- `book.registered`: `title` é aparado; vazio, o evento é ignorado. Id
+  repetido: vale o primeiro na ordem total. `author`, `format` e `sha256` são
+  aparados. Dois cadastros do mesmo arquivo em dispositivos diferentes
+  (offline) viram dois livros — a superfície evita o caso consultando o
+  `sha256` antes de cadastrar.
+- `book.edited`: LWW por campo (§3); título vazio mantém o anterior; `author`
+  vazio o apaga.
+- `book.archived` tira o livro da lista (`order`), preservando anotações e
+  progresso; eventos posteriores continuam valendo.
+- `book.progressed` é o **"onde parei"**: vence o último na ordem total —
+  inteiro, com a posição e o `percent` (inteiro de 0 a 100, a fração do livro
+  antes da posição; ausente ou inválido ≡ `null`, e a posição vale assim
+  mesmo). O cliente emite ao sair da leitura (e, dentro de uma sessão de
+  foco, também na pausa e no fim do bloco), só se a posição mudou;
+  `session_id` diz em que sessão de foco se leu (ausente: leitura avulsa) —
+  nenhuma projeção o lê ainda.
+- `annotation.created`: o livro precisa existir naquela posição da ordem
+  total; posição válida; `quote` não vazia depois de aparada; `text`
+  aparado (ausente ≡ `""`). Id repetido — ou já apagado —: o evento é
+  ignorado.
+- `annotation.edited`: LWW do `text` (aparado; vazio transforma a nota em
+  grifo); `text` ausente, o evento é ignorado.
+- `annotation.deleted` é **tombstone**: a anotação sai do estado e eventos
+  posteriores sobre o mesmo id são ignorados.
 
 ### Captura e triagem
 
@@ -404,7 +472,8 @@ day_list: [task_id…], alerts: { too_many_a } }`.
 
 ### 4.4 Consistência (`projection: "stats"`)
 
-- Dia estudado = dia local com ≥ 1 `card.reviewed` ou `session.ended`.
+- Dia estudado = dia local com ≥ 1 `card.reviewed` ou `session.ended` — e,
+  desde o 1.7, leitura: `book.progressed` ou `annotation.created`.
 - Streak = dias estudados consecutivos terminando em `hoje` ou ontem.
 - `reviews_today` conta apenas `card.reviewed` na data local de `now`.
 
@@ -456,12 +525,17 @@ Regras de agregação (datas locais em `tz`; minutos = `round(segundos/60)`):
   `checkins_on_task` os com `on_task: true` ("na tarefa em X de Y checagens").
 - **Agenda**: `appointment_minutes` soma a duração dos compromissos cujo
   início cai na semana (tempo planejado, para contraste com o executado).
+- **Leitura (1.7)**: `annotations` conta `annotation.created` por dia local;
+  `books_read` são os `book_id` **distintos** com `book.progressed` ou
+  `annotation.created` no dia — e, em `totals`, os distintos na semana (não
+  a soma dos dias). Mede-se livro lido e anotação feita, não páginas: o
+  "onde parei" pode saltar (`/ir 50%`) sem que se tenha lido o trecho.
 - `days` traz **os sete dias da semana**, zerados quando sem atividade.
 
 Saída: `{ week_start, week_end, days: { <AAAA-MM-DD>: { reviews,
 focus_minutes, pause_minutes, completed, interrupted, checkins,
-checkins_on_task } }, totals: { idem }, reasons: { <motivo>: n },
-appointment_minutes }`.
+checkins_on_task, annotations, books_read } }, totals: { idem }, reasons:
+{ <motivo>: n }, appointment_minutes }`.
 
 ### 4.8 Agenda (`projection: "calendar"`)
 
@@ -614,6 +688,30 @@ relation } … ] }`.
 Saída: `{ pages: { <page_id>: { title, body, tags, pinned, archived,
 version, created_at, updated_at } }, order: [page_id…] }`.
 
+### 4.16 Livros (`projection: "books"`)
+
+- `books` = todo livro cadastrado (§3, Livros), **inclusive arquivado**, com:
+  - `title`, `author` (`""` se ausente), `format`, `sha256`, `archived`;
+  - `progress` = a `loc` do último `book.progressed` válido (`null` se
+    nenhum), com `page` só quando presente; `progress_percent` (inteiro ou
+    `null`) e `progress_at` (`ts` do evento, ou `null`);
+  - `created_at` = `ts` do `book.registered`;
+  - `updated_at` = `ts` do último evento, na ordem total, que mudou o livro
+    (título ou autor), o progresso ou uma anotação dele (criada, editada ou
+    apagada). Arquivar não muda `updated_at`;
+  - `annotations` = os ids das anotações vivas do livro, em **ordem de
+    leitura**: `chapter`, `para`, `created_at`, `annotation_id` (crescentes).
+- `annotations` = as anotações vivas: `{ book_id, loc, quote, text,
+  created_at, updated_at }` (`updated_at` = `ts` da última edição, ou o da
+  criação).
+- `order` = os livros **não arquivados**, `updated_at` decrescente; empate
+  por `book_id` crescente.
+
+Saída: `{ books: { <book_id>: { title, author, format, sha256, archived,
+progress, progress_percent, progress_at, created_at, updated_at,
+annotations } }, annotations: { <annotation_id>: { book_id, loc, quote,
+text, created_at, updated_at } }, order: [book_id…] }`.
+
 ## 5. Sincronização
 
 O desenho original previa um servidor com uma única operação `POST /sync`
@@ -676,6 +774,94 @@ perdido ou errado, o pior que acontece é rebaixar o que já se tem, e o dedup
 absorve. Com o log local vazio ele é descartado de propósito, senão uma réplica
 recém-restaurada acharia que está em dia e ficaria vazia para sempre.
 
+### Livros no bucket (1.7)
+
+O EPUB de um livro cadastrado (§3, Livros) viaja pelo bucket para que o
+usuário cadastre uma vez — na CLI ou na extensão — e não pense mais em onde o
+arquivo está. Como os objetos do log, é **transporte**: não há evento nem
+projeção do arquivo; quem diz quais livros existem é o log. Ao contrário dos
+objetos do log, vai **cifrado**: o bucket guarda só bytes opacos, e nenhum
+livro vaza por ele.
+
+```
+<prefixo>/livros/<book_id>.pnnlivro   — um objeto por livro, application/octet-stream
+```
+
+Formato `.pnnlivro` (versão 1):
+
+```
+"PNNLIVRO" (8) | versão 0x01 | iterações (uint32 big-endian) | sal (16) | nonce (12) |
+AES-256-GCM(EPUB)  (texto cifrado + tag de 16)
+```
+
+- **Chave** = PBKDF2-HMAC-SHA256(senha dos livros em UTF-8, sal, iterações,
+  32 bytes). Quem grava usa **600 000** iterações e sal e nonce aleatórios;
+  quem lê aceita de 1 a 10 000 000 (o cabeçalho é autenticado).
+- **AAD** = o cabeçalho inteiro + o `book_id` em UTF-8: senha errada,
+  cabeçalho alterado ou objeto trocado de livro falham na autenticação.
+- Quem baixa confere `sha256(EPUB)` com o `sha256` do `book.registered`;
+  divergente, o arquivo não é guardado.
+- **O formato é público** (o repositório é público): quem protege o livro é a
+  senha dos livros, que nunca vai ao bucket nem ao código (ver Credenciais).
+  O vetor `spec/sync/livro_cifrado.json` trava o formato nos dois clientes —
+  com sal e nonce fixos, Go e Web Crypto produzem o mesmo blob, byte a byte.
+- **Quando sobe e quando desce**: depois dos eventos, cada cliente sobe o
+  livro que guarda e o bucket não tem, e baixa o que o bucket tem e ele não
+  (livro arquivado não desce). A CLI faz isso no `pnn sync`; a extensão
+  cifra e sobe no cadastro, **antes** de gravar o `book.registered` — envio
+  que falha não deixa cadastro sem arquivo. Sem a senha dos livros, os
+  eventos sincronizam e os livros esperam.
+- O `book_id` é aleatório e o objeto é imutável na prática (o mesmo livro,
+  reenviado, só muda o sal e o nonce): não há escrita perdida, como nos
+  objetos do log. Clientes antigos ignoram o objeto — o sync só lê chaves
+  `.jsonl`/`.jsonl.zst`. A política sem `s3:DeleteObject` vale igual: livro
+  arquivado deixa o objeto.
+- **Limite**: o conteúdo é cifrado, mas o log não — título, autor, trechos
+  citados e o `sha256` seguem legíveis no bucket para quem tem acesso a ele,
+  como páginas e cartões. Cifrar o log é outra decisão.
+
+### Login e logout de um dispositivo
+
+Para usar o pnn num aparelho que não é seu (o do trabalho) sem deixar nele
+nada depois do expediente. Não há "ambientes": o bucket é um só; o que muda
+é se o aparelho está com a sessão aberta.
+
+- **Logout** (`pnn logout`; na extensão, "Sair deste dispositivo"):
+  sincroniza, **relê o próprio objeto do bucket e confere que ele tem todos
+  os eventos que este dispositivo emitiu** (e, na CLI, que todo livro
+  guardado aqui tem o seu `.pnnlivro`), e só então apaga a réplica, os
+  livros, a credencial e, na CLI, as cópias de página que o editor deixou em
+  `/tmp/pnn-*.md`; na extensão, todo o `chrome.storage.local` e os alarmes.
+  **Só se apaga o que está comprovadamente no bucket**: sync que falha,
+  conferência que não bate (upload truncado, consistência) ou livro só local
+  recusam o logout, e nada é apagado. Na CLI, só os arquivos que são do pnn
+  saem da pasta da réplica — o que mais houver nela fica (e é avisado).
+- **Login** (`pnn login`; na extensão, preencher o painel de sync): pede a
+  credencial uma vez, confere que ela lista o bucket, restaura o log e os
+  livros, e o usuário continua de onde parou.
+- **A réplica pertence a um bucket.** No primeiro sync bem-sucedido, a
+  réplica grava a identidade do remoto (`~/.pnn/remoto`; na extensão,
+  `sync_remote`): `s3://<endpoint ou aws>/<bucket>/<prefixo>`. Daí em diante
+  o sync recusa outro remoto — sem a trava, apontar a configuração para
+  outro bucket faria o sync subir para ele tudo o que o dispositivo emitiu,
+  levando os eventos de um bucket para o outro. O login recusa uma réplica
+  com dados de outro remoto (ou de remoto desconhecido). Para trocar de
+  bucket: logout.
+- **Dispositivo estável por máquina** (CLI): no login de uma réplica vazia,
+  o `device` é `dev-` + os 32 primeiros hex de
+  sha256(`"pnn:" + /etc/machine-id + ":" + pasta da réplica`) — o logout e o
+  login seguintes reusam o mesmo objeto do bucket, em vez de um objeto novo
+  por dia; outra pasta ou outra máquina, outro id. Sem `machine-id`,
+  aleatório. Na extensão, o id é novo a cada login (o navegador não tem
+  identidade de máquina): um objeto pequeno a mais por login.
+- **Guarda no upload**: o sync nunca sobrescreve o próprio objeto com menos
+  eventos do que ele tem no bucket (a fusão já impede; é a última defesa).
+- **Limites** — o que o pnn não alcança no aparelho: o histórico do shell
+  (os títulos do `pnn t`), a central de notificações do sistema (os avisos
+  do pnn), variáveis de credencial exportadas no shell (o logout avisa) e o
+  apagamento forense (apagar arquivo não é sobrescrever o disco; no aparelho
+  de trabalho vale a criptografia de disco).
+
 ### Credenciais
 
 Em ambos os clientes a chave é **provisionada de fora** e nunca versionada — o
@@ -689,10 +875,18 @@ varredura automática.
   Sem `PNN_S3_REGION`, a **região é resolvida pela cadeia da AWS** (`AWS_REGION`,
   `AWS_DEFAULT_REGION`, região do perfil) — fixar um padrão atropelaria o perfil
   e assinaria na região errada, falha que só aparece como `SignatureDoesNotMatch`.
+  A senha dos livros (§5, Livros no bucket) vem de `PNN_LIVROS_SENHA`.
 - **Extensão**: cadeia equivalente — `chrome.storage.managed` (política do
   navegador, o provisionamento automático) e `chrome.storage.local`, que
   sobrepõe, como o ambiente sobrepõe o perfil na CLI. Esquema em
-  `extension/schema.json`. Nenhum segredo é gravado em `~/.pnn` nem no código.
+  `extension/schema.json`; a senha dos livros é o campo `bookPassphrase`
+  (no painel, nunca reexibida). Nenhum segredo vai para o código, e nenhum
+  é gravado em `~/.pnn` **fora de uma sessão**: com `pnn login` (abaixo,
+  Login e logout), a credencial fica em `~/.pnn/login.json` (0600) até o
+  `pnn logout` — e, havendo login, ela vale e o ambiente do shell não.
+- A senha dos livros é **a mesma nos dois clientes** e é aparada nas pontas
+  (a extensão apara todo campo da configuração). Esquecida, os objetos do
+  bucket ficam ilegíveis; as cópias locais continuam.
 
 A extensão assina as requisições com **SigV4 implementado sobre Web Crypto**
 (`extension/storage/sigv4.js`): sem bundler, trazer o SDK custaria um passo de

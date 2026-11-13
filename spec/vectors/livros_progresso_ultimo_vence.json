@@ -1,0 +1,42 @@
+{
+  "name": "book.progressed é o \"onde parei\": vence o último na ordem total (lc maior, mesmo com relógio de parede atrasado), inteiro — leva a página impressa e o percent quando houver (percent ausente ou inválido = null); loc inválida e livro inexistente são ignorados; o progresso atualiza updated_at e a ordem dos livros",
+  "projection": "books",
+  "now": "2026-11-12T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "book.registered", "v": 1, "lc": 1, "ts": "2026-11-10T10:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "Livro um", "format": "epub", "sha256": "aaa" } },
+    { "id": "evt-02", "type": "book.registered", "v": 1, "lc": 2, "ts": "2026-11-10T10:01:00Z", "device": "dev-a",
+      "payload": { "book_id": "b2", "title": "Livro dois", "format": "epub", "sha256": "bbb" } },
+    { "id": "evt-03", "type": "book.progressed", "v": 1, "lc": 3, "ts": "2026-11-10T10:10:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "loc": { "chapter": 2, "para": 5 }, "percent": 12 } },
+    { "id": "evt-04", "type": "book.progressed", "v": 1, "lc": 3, "ts": "2026-11-10T10:02:00Z", "device": "dev-b",
+      "payload": { "book_id": "b2", "loc": { "chapter": 1, "para": 1 }, "percent": 3.5 } },
+    { "id": "evt-05", "type": "book.progressed", "v": 1, "lc": 4, "ts": "2026-11-10T10:05:00Z", "device": "dev-b",
+      "payload": { "book_id": "b1", "loc": { "chapter": 4, "para": 1, "page": "88" }, "percent": 37 } },
+    { "id": "evt-06", "type": "book.progressed", "v": 1, "lc": 5, "ts": "2026-11-10T10:20:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "loc": { "chapter": -1, "para": 2 } } },
+    { "id": "evt-07", "type": "book.progressed", "v": 1, "lc": 5, "ts": "2026-11-10T10:21:00Z", "device": "dev-b",
+      "payload": { "book_id": "b9", "loc": { "chapter": 1, "para": 1 } } },
+    { "id": "evt-08", "type": "book.progressed", "v": 1, "lc": 6, "ts": "2026-11-10T10:22:00Z", "device": "dev-b",
+      "payload": { "book_id": "b2", "loc": { "chapter": "3", "para": 1 } } }
+  ],
+  "expected": {
+    "books": {
+      "b1": {
+        "progress": { "chapter": 4, "para": 1, "page": "88" },
+        "progress_percent": 37,
+        "progress_at": "2026-11-10T10:05:00Z",
+        "updated_at": "2026-11-10T10:05:00Z"
+      },
+      "b2": {
+        "progress": { "chapter": 1, "para": 1 },
+        "progress_percent": null,
+        "progress_at": "2026-11-10T10:02:00Z",
+        "updated_at": "2026-11-10T10:02:00Z"
+      }
+    },
+    "order": ["b1", "b2"]
+  }
+}

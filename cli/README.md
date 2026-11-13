@@ -211,6 +211,27 @@ numerada. Detalhes em [`spec/CLI.md`](../spec/CLI.md) §3, "Páginas".
 | `pnn fixar N` | `page.edited` (`pinned`) | alterna fixar/desafixar |
 | `pnn escrever N\|título` | `page.edited` (+ os eventos dos comandos `/`) | o editor do pnn fora do foco: `/tarefa`, `/tarefas`, `/feito`, `/cartao`, `/tag`, `/ligar`; `Ctrl+Z`/`Ctrl+Y` desfaz/refaz; `Esc` grava e sai |
 
+### Livros (catálogo 1.7)
+
+Ler e anotar EPUB no terminal. Cadastra-se uma vez (aqui ou na extensão) e
+o pnn guarda o arquivo em `~/.pnn/livros/`; o `pnn sync` o leva e traz
+**cifrado** pelo bucket (senha em `PNN_LIVROS_SENHA`). No log vão a
+identidade do livro (com o sha256), as anotações e o "onde parei". Detalhes
+em [`spec/CLI.md`](../spec/CLI.md) §3, "Livros".
+
+| Comando | Evento(s) | Notas |
+|---|---|---|
+| `pnn livro arquivo.epub [--titulo T] [--autor A]` | `book.registered` | guarda a cópia em `~/.pnn/livros/` (o original pode sumir); o mesmo arquivo (pelo sha256) não cadastra de novo; PDF/MOBI recusados com a saída |
+| `pnn livros [--arquivados] [--json]` | — | numerada: progresso, anotações, "ainda não baixado" |
+| `pnn livros procurar pasta [--cadastrar]` | — (`--cadastrar`: `book.registered`) | guarda de novo, pelo conteúdo, os que faltam aqui (sem passar pelo bucket) |
+| `pnn ler N\|título` | `annotation.*`, `book.progressed`, `card.created` v2 | o leitor do pnn, de onde parou: `↑↓` parágrafo, `Espaço`/`b` tela, `←→` capítulo, `n`/`N` anotação; `/nota`, `/grifo [trecho]`, `/notas`, `/editar`, `/apagar`, `/ir`, `/buscar`, `/cartao`, `/distracao`; `Esc` grava onde parou |
+| `pnn anotacoes N\|título` | — | em ordem de leitura, por capítulo; numerada para `pnn editar N "comentário"` e `pnn apagar N` |
+
+Livro é nó de sinapse: `pnn dia` → `pnn ligar 1 "adult adhd"` (basta um
+trecho do título) faz o `pnn foco 1` abrir o livro; o `/cartao` da leitura
+nasce ligado ao livro (`pnn revisar --ao-redor N` estuda esses cartões); e
+ler conta como dia estudado no streak e aparece no `pnn semana`.
+
 ### Estudo
 
 | Comando | Evento(s) | Notas |
@@ -232,12 +253,15 @@ numerada. Detalhes em [`spec/CLI.md`](../spec/CLI.md) §3, "Páginas".
 
 | Comando | Evento(s) | Notas |
 |---|---|---|
-| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN] [--relogio]` | `session.started/ended` (+`distraction.captured`, `checkin.logged`, `pause.*`) | `-m` padrão = janela de atenção; Esc pergunta o motivo (opcional); `--checkin N` pergunta "na tarefa? [s/n]" a cada N min (sino); `Ctrl+P` = break de 5/10/15/20/25 min que encerra a sessão (`reason: "pausa"`); com a tarefa ligada a página (⚡), abre no **modo de escrita**: a página num editor na própria tela, relógio na barra, `/` abre comandos (`/pagina`, `/tarefa`, `/tarefas`, `/feito`, `/cartao`, `/tag`, `/ligar`, `/distracao`), `Ctrl+S` grava, `Ctrl+Z` desfaz; sem página, o `/` da linha de distração abre os mesmos comandos para a tarefa (`/pagina` cria e começa a escrever; `/tarefa` cria subtarefa) e `Ctrl+O` já sugere `/pagina`; `--relogio` abre no relógio grande (`Ctrl+O` escreve); `Ctrl+E` leva a página ao `$EDITOR` |
+| `pnn foco [N] [-m MIN] [--pausa MIN] [--checkin MIN] [--relogio]` | `session.started/ended` (+`distraction.captured`, `checkin.logged`, `pause.*`) | `-m` padrão = janela de atenção; Esc pergunta o motivo (opcional); `--checkin N` pergunta "na tarefa? [s/n]" a cada N min (sino); `Ctrl+P` = break de 5/10/15/20/25 min que encerra a sessão (`reason: "pausa"`); com a tarefa ligada a página (⚡), abre no **modo de escrita**: a página num editor na própria tela, relógio na barra, `/` abre comandos (`/pagina`, `/tarefa`, `/tarefas`, `/feito`, `/cartao`, `/tag`, `/ligar`, `/distracao`), `Ctrl+S` grava, `Ctrl+Z` desfaz; sem página, o `/` da linha de distração abre os mesmos comandos para a tarefa (`/pagina` cria e começa a escrever; `/tarefa` cria subtarefa) e `Ctrl+O` já sugere `/pagina`; `--relogio` abre no relógio grande (`Ctrl+O` escreve); `Ctrl+E` leva a página ao `$EDITOR`; com a tarefa ligada a **livro** (📖), abre no **modo de leitura** com o relógio na barra (`Esc` volta ao relógio gravando onde parou; página e livro ligados: "Abrir o quê?") |
 | `pnn pausa [MIN]` | `pause.started` | pausa avulsa com duração definida (Safren) |
 | `pnn volta` | `pause.ended` | encerra a pausa aberta |
 | `pnn pausa --das HH:MM --ate HH:MM` | `pause.logged` | retroativa: tempo do domínio no payload |
 | `pnn semana [N] [--de D]` | — | retrospectiva de qualquer semana (projeção `review`) |
-| `pnn sync` | — | troca eventos com o bucket S3 (sobe o seu objeto em `.jsonl.zst`, baixa os dos outros); ver §7 |
+| `pnn sync` | — | troca eventos com o bucket S3 (sobe o seu objeto em `.jsonl.zst`, baixa os dos outros) e leva e traz os livros cifrados; ver §7 |
+| `pnn config [--json]` | — | as variáveis de configuração: valor neste terminal, o que vale quando vazia, para que serve (segredos nunca aparecem); a 1ª linha diz se há login |
+| `pnn login` | — | entra neste dispositivo: pede a credencial uma vez (fica em `~/.pnn/login.json`, 0600, até o logout), restaura tudo; ver §7 |
+| `pnn logout` | — | sai: sincroniza, confere que tudo está no bucket e só então apaga réplica, livros e credencial; ver §7 |
 
 ### Edição e arquivamento (catálogo v1.1)
 
@@ -295,6 +319,17 @@ estudo novo entra como um valor novo, sem tocar na projeção Leitner (OCP).
 
 ## 7. Sincronização
 
+**Aparelho que não é seu (o do trabalho)**: `pnn login` no começo do
+expediente — pede bucket e credencial uma vez, restaura tudo, e você continua
+de onde parou —; `pnn logout` no fim — sincroniza, relê do bucket o objeto
+deste aparelho e confere que tem todos os eventos dele (e que todo livro
+guardado aqui está lá), e só então apaga a réplica, os livros e a credencial.
+Se algo não confere, nada é apagado. No aparelho de trabalho, não exporte a
+credencial no `~/.bashrc` (o pnn não consegue apagá-la de lá — o logout
+avisa); e o histórico do shell guarda os títulos do `pnn t`
+(`HISTCONTROL=ignorespace` e comandos começando com espaço). A réplica que já
+sincronizou com um bucket recusa outro: trocar de bucket é logout + login.
+
 `pnn sync` troca eventos com um bucket S3 ([`internal/sync/`](internal/sync/),
 SPEC §5): baixa os objetos dos outros dispositivos que mudaram, funde no log
 local (dedup por `id` + ordem total) e sobe o próprio. Cada dispositivo grava
@@ -309,8 +344,17 @@ Quem lê reconhece o formato pelo conteúdo, então os `.jsonl` sem compressão
 passou a comprimir fica congelado no bucket e o dedup absorve a repetição. O
 log local continua JSONL puro.
 
+Depois dos eventos, os **livros**: o EPUB guardado só aqui sobe como
+`<prefixo>/livros/<id>.pnnlivro`, cifrado com AES-256-GCM e chave da senha
+dos livros (PBKDF2); o que está só no bucket desce, é decifrado, conferido
+pelo sha256 do cadastro e guardado em `~/.pnn/livros/`. O formato é o mesmo
+da extensão, travado pelo vetor `spec/sync/livro_cifrado.json`. Sem a senha,
+os livros esperam (o sync avisa quantos).
+
 Configuração: `PNN_S3_BUCKET` (e `PNN_S3_PREFIX`, `PNN_S3_ENDPOINT`,
-`PNN_S3_REGION`); as credenciais vêm da cadeia padrão da AWS, nunca de `~/.pnn`.
+`PNN_S3_REGION`) e, para os livros, `PNN_LIVROS_SENHA` — a mesma senha dos
+livros do painel da extensão; as credenciais vêm da cadeia padrão da AWS,
+nunca de `~/.pnn`.
 
 ---
 
@@ -323,13 +367,20 @@ make build      # só compila em ./pnn, sem instalar
 make uninstall  # remove do PATH
 ```
 
-Variáveis de ambiente úteis:
+Variáveis de ambiente: **`pnn config`** lista todas as que o pnn lê,
+agrupadas (réplica e fuso, sincronização, credenciais AWS, editor e leitura,
+saída e avisos), com o valor neste terminal, o que vale quando estão vazias,
+para que serve cada uma e o campo equivalente no painel da extensão. Segredo
+(`PNN_LIVROS_SENHA`, credenciais AWS) aparece só como "definida", também no
+`--json`. A lista é testada contra o código: variável nova lida sem entrar
+no `pnn config` derruba o `go test`. As mais usadas:
 
 | Var | Efeito |
 |---|---|
 | `PNN_HOME` | diretório da réplica (padrão `~/.pnn`) |
 | `PNN_TZ` / `TZ` | fuso IANA usado nas projeções de "dia" |
-| `NO_COLOR` | desliga cores |
+| `PNN_S3_*` / `PNN_LIVROS_SENHA` | bucket do `pnn sync` / senha que cifra os livros |
+| `NO_COLOR` / `PNN_SILENCIO` | desliga cores / som e notificações |
 
 Dica de depuração: como o log é texto, você inspeciona o que a CLI gravou com
 

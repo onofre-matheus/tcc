@@ -20,6 +20,7 @@ type App struct {
 	TZ    string // fuso IANA do usuário
 	Now   func() time.Time
 	Out   io.Writer
+	In    io.Reader // as perguntas do login e a confirmação do logout
 	Color bool
 	// Editor abre o arquivo no editor do usuário e espera ele fechar
 	// (páginas, catálogo 1.6). nil = $PNN_EDITOR/$VISUAL/$EDITOR de verdade;
@@ -46,6 +47,7 @@ func New() (*App, error) {
 		TZ:    detectTZ(),
 		Now:   time.Now,
 		Out:   os.Stdout,
+		In:    os.Stdin,
 		Color: colorEnabled(),
 	}, nil
 }

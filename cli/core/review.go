@@ -16,6 +16,10 @@ type ReviewDay struct {
 	Interrupted    int `json:"interrupted"`
 	Checkins       int `json:"checkins"`
 	CheckinsOnTask int `json:"checkins_on_task"`
+	// Leitura (1.7): anotações feitas e livros lidos (com progresso ou
+	// anotação) no dia; no total, livros distintos na semana.
+	Annotations int `json:"annotations"`
+	BooksRead   int `json:"books_read"`
 }
 
 type ReviewState struct {
@@ -68,6 +72,18 @@ func Review(events []Event, p Params) (ReviewState, error) {
 	}
 	sessions := map[string]*interval{}
 	pauses := map[string]*interval{}
+	booksByDay := map[string]map[string]bool{}
+	weekBooks := map[string]bool{}
+	readBook := func(day, bookID string) {
+		if bookID == "" || !inWeek(day) {
+			return
+		}
+		if booksByDay[day] == nil {
+			booksByDay[day] = map[string]bool{}
+		}
+		booksByDay[day][bookID] = true
+		weekBooks[bookID] = true
+	}
 	ensure := func(m map[string]*interval, id string) *interval {
 		if m[id] == nil {
 			m[id] = &interval{}
@@ -132,6 +148,25 @@ func Review(events []Event, p Params) (ReviewState, error) {
 			}
 			p := ensure(pauses, pl.PauseID)
 			p.startTS, p.endTS = pl.StartsAt, pl.EndsAt
+
+		case "book.progressed", "annotation.created":
+			pl, err := decodePayload[struct {
+				BookID       string `json:"book_id"`
+				AnnotationID string `json:"annotation_id"`
+			}](event)
+			if err != nil {
+				return ReviewState{}, err
+			}
+			day, err := LocalDate(event.TS, p.TZ)
+			if err != nil {
+				return ReviewState{}, err
+			}
+			readBook(day, pl.BookID)
+			if event.Type == "annotation.created" && pl.AnnotationID != "" && inWeek(day) {
+				d := state.Days[day]
+				d.Annotations++
+				state.Days[day] = d
+			}
 
 		case "card.reviewed":
 			day, err := LocalDate(event.TS, p.TZ)
@@ -231,7 +266,14 @@ func Review(events []Event, p Params) (ReviewState, error) {
 		state.Days[day] = d
 	}
 
+	for day, books := range booksByDay {
+		d := state.Days[day]
+		d.BooksRead = len(books)
+		state.Days[day] = d
+	}
+	state.Totals.BooksRead = len(weekBooks) // livros distintos, não a soma dos dias
 	for _, d := range state.Days {
+		state.Totals.Annotations += d.Annotations
 		state.Totals.Reviews += d.Reviews
 		state.Totals.FocusMinutes += d.FocusMinutes
 		state.Totals.PauseMinutes += d.PauseMinutes

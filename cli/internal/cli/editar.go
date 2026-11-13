@@ -50,7 +50,7 @@ func newEditarCmd(a *app.App) *cobra.Command {
 	var tags tagEdit
 	cmd := &cobra.Command{
 		Use:   `editar N ["novo texto"]`,
-		Short: "edita o item N da última tela (task.edited, deck.renamed, card.edited, tag.renamed, study.saved, page.edited)",
+		Short: "edita o item N da última tela (task.edited, deck.renamed, card.edited, tag.renamed, study.saved, page.edited, book.edited, annotation.edited)",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(c *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
@@ -104,6 +104,16 @@ func newEditarCmd(a *app.App) *cobra.Command {
 					return fmt.Errorf("cartão se edita por campo: use --frente, --verso e/ou --tag/--untag/--tags")
 				}
 				return editarCartao(a, ref.ID, frente, verso, tags)
+			case kindBook:
+				if frente != "" || verso != "" || data != "" {
+					return fmt.Errorf(`livro se renomeia: pnn editar %s "Título"`, args[0])
+				}
+				return editarLivro(a, ref.ID, text)
+			case kindAnnotation:
+				if frente != "" || verso != "" || data != "" {
+					return fmt.Errorf(`anotação muda o comentário: pnn editar %s "comentário"`, args[0])
+				}
+				return editarAnotacao(a, ref.ID, text)
 			}
 			return fmt.Errorf("o item %s da última tela não é editável", args[0])
 		},
@@ -120,7 +130,7 @@ func newEditarCmd(a *app.App) *cobra.Command {
 func newApagarCmd(a *app.App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "apagar N",
-		Short: "apaga a tarefa, cancela o compromisso ou apaga a sessão salva N da última tela (tombstone)",
+		Short: "apaga a tarefa, cancela o compromisso, apaga a sessão salva ou a anotação N da última tela (tombstone)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
@@ -152,6 +162,12 @@ func newApagarCmd(a *app.App) *cobra.Command {
 			if ref.Kind == kindStudy {
 				return apagarSessao(a, ref.ID)
 			}
+			if ref.Kind == kindAnnotation {
+				return apagarAnotacao(a, ref.ID)
+			}
+			if ref.Kind == kindBook {
+				return fmt.Errorf("livro não se apaga (as anotações ficam no log) — arquive com `pnn arquivar %s`", args[0])
+			}
 			if ref.Kind == core.NodeTag {
 				return fmt.Errorf("tag não se apaga — renomeie com `pnn editar %s \"novo-nome\"` ou tire dos cartões com `pnn editar N --untag`", args[0])
 			}
@@ -166,7 +182,7 @@ func newApagarCmd(a *app.App) *cobra.Command {
 func newArquivarCmd(a *app.App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "arquivar N",
-		Short: "arquiva o cartão, deck ou página N da última tela (fora da fila/lista, história preservada)",
+		Short: "arquiva o cartão, deck, página ou livro N da última tela (fora da fila/lista, história preservada)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			ref, err := resolveRef(a, args[0])
@@ -204,6 +220,10 @@ func newArquivarCmd(a *app.App) *cobra.Command {
 				}
 				fmt.Fprintf(a.Out, "✔ página arquivada: %s (fora da lista, texto preservado — `pnn paginas --arquivadas`)\n", page.Title)
 				return nil
+			case kindBook:
+				return arquivarLivro(a, ref.ID)
+			case kindAnnotation:
+				return fmt.Errorf("anotação não se arquiva — apague com `pnn apagar %s`", args[0])
 			case "task":
 				return fmt.Errorf("tarefa não se arquiva — conclua com `pnn feito %s` ou apague com `pnn apagar %s`", args[0], args[0])
 			case "appointment":

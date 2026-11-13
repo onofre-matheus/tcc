@@ -31,6 +31,10 @@
     "sessionToken": {
       "title": "AWS_SESSION_TOKEN, quando a credencial for temporária (STS)",
       "type": "string"
+    },
+    "bookPassphrase": {
+      "title": "Senha dos livros (PNN_LIVROS_SENHA na CLI): cifra os EPUBs no bucket",
+      "type": "string"
     }
   }
 }

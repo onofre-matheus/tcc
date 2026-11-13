@@ -147,6 +147,17 @@
         <div id="inbox"></div>
       </section>
 
+      <!-- Livros (catálogo 1.7): cadastrar EPUB e ver as anotações; ler é da CLI -->
+      <section class="panel" id="booksPanel">
+        <h2>Livros</h2>
+        <div class="row" style="align-items: center; margin-bottom: 8px">
+          <label class="btn sm" for="bookFile" title="O EPUB vai cifrado com a senha dos livros; o pnn sync da CLI o traz">＋ Cadastrar EPUB</label>
+          <input type="file" id="bookFile" accept=".epub,application/epub+zip" hidden />
+          <span class="meta grow" id="bookMsg"></span>
+        </div>
+        <div id="bookList"></div>
+      </section>
+
       <!-- Retrospectiva semanal -->
       <section class="panel">
         <h2>Semana</h2>

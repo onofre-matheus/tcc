@@ -1,0 +1,43 @@
+{
+  "name": "livro como nó de sinapse (1.7): vale a partir de um book.registered com título; livro sem título, inexistente ou cadastrado só depois do link.created invalidam a conexão; arquivar o livro não a remove",
+  "projection": "links",
+  "now": "2026-11-12T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-01", "type": "book.registered", "v": 1, "lc": 1, "ts": "2026-11-10T10:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "Mastering Your Adult ADHD", "format": "epub", "sha256": "aaa" } },
+    { "id": "evt-02", "type": "book.registered", "v": 1, "lc": 2, "ts": "2026-11-10T10:01:00Z", "device": "dev-a",
+      "payload": { "book_id": "b2", "title": "   ", "format": "epub", "sha256": "bbb" } },
+    { "id": "evt-03", "type": "task.created", "v": 1, "lc": 3, "ts": "2026-11-10T10:02:00Z", "device": "dev-a",
+      "payload": { "task_id": "t1", "title": "Ler a sessão 1" } },
+    { "id": "evt-04", "type": "card.created", "v": 2, "lc": 4, "ts": "2026-11-10T10:03:00Z", "device": "dev-a",
+      "payload": { "card_id": "c1", "front": "Metáfora da escada?", "back": "TCC é a escada", "tags": [] } },
+    { "id": "evt-05", "type": "link.created", "v": 1, "lc": 5, "ts": "2026-11-10T10:04:00Z", "device": "dev-a",
+      "payload": { "link_id": "l1", "from": { "kind": "task", "id": "t1" }, "to": { "kind": "book", "id": "b1" } } },
+    { "id": "evt-06", "type": "link.created", "v": 1, "lc": 6, "ts": "2026-11-10T10:05:00Z", "device": "dev-a",
+      "payload": { "link_id": "l2", "from": { "kind": "book", "id": " b1 " }, "to": { "kind": "card", "id": "c1" } } },
+    { "id": "evt-07", "type": "link.created", "v": 1, "lc": 7, "ts": "2026-11-10T10:06:00Z", "device": "dev-a",
+      "payload": { "link_id": "l3", "from": { "kind": "task", "id": "t1" }, "to": { "kind": "book", "id": "b2" } } },
+    { "id": "evt-08", "type": "link.created", "v": 1, "lc": 7, "ts": "2026-11-10T10:07:00Z", "device": "dev-b",
+      "payload": { "link_id": "l4", "from": { "kind": "task", "id": "t1" }, "to": { "kind": "book", "id": "b9" } } },
+    { "id": "evt-09", "type": "link.created", "v": 1, "lc": 8, "ts": "2026-11-10T10:08:00Z", "device": "dev-b",
+      "payload": { "link_id": "l5", "from": { "kind": "book", "id": "b3" }, "to": { "kind": "card", "id": "c1" } } },
+    { "id": "evt-10", "type": "book.registered", "v": 1, "lc": 9, "ts": "2026-11-10T10:09:00Z", "device": "dev-b",
+      "payload": { "book_id": "b3", "title": "Cadastrado depois", "format": "epub", "sha256": "ccc" } },
+    { "id": "evt-11", "type": "book.archived", "v": 1, "lc": 10, "ts": "2026-11-10T10:10:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1" } }
+  ],
+  "expected": {
+    "links": {
+      "l1": { "from": "task:t1", "to": "book:b1", "relation": null },
+      "l2": { "from": "book:b1", "to": "card:c1", "relation": null }
+    },
+    "neighbors": {
+      "book:b1": ["card:c1", "task:t1"],
+      "card:c1": ["book:b1"],
+      "task:t1": ["book:b1"]
+    },
+    "nodes": ["book:b1", "card:c1", "task:t1"]
+  }
+}

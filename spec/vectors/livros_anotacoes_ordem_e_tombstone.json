@@ -1,0 +1,65 @@
+{
+  "name": "annotation.created exige livro existente naquela posição da ordem total, loc com chapter/para inteiros ≥ 1 e trecho citado não vazio; o primeiro id vence; annotation.edited troca o texto (vazio vira grifo); annotation.deleted é tombstone; as anotações do livro seguem a ordem de leitura (chapter, para, created_at, id)",
+  "projection": "books",
+  "now": "2026-11-12T12:00:00Z",
+  "tz": "America/Sao_Paulo",
+  "permutations": true,
+  "events": [
+    { "id": "evt-00", "type": "annotation.created", "v": 1, "lc": 1, "ts": "2026-11-10T09:00:00Z", "device": "dev-b",
+      "payload": { "annotation_id": "a0", "book_id": "b1", "loc": { "chapter": 1, "para": 1 }, "quote": "antes do cadastro" } },
+    { "id": "evt-01", "type": "book.registered", "v": 1, "lc": 1, "ts": "2026-11-10T10:00:00Z", "device": "dev-a",
+      "payload": { "book_id": "b1", "title": "Livro", "format": "epub", "sha256": "aaa" } },
+    { "id": "evt-02", "type": "annotation.created", "v": 1, "lc": 2, "ts": "2026-11-10T10:05:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a1", "book_id": "b1", "loc": { "chapter": 3, "para": 17, "page": " 40 " }, "quote": " CBT is like a ladder. ", "text": "metáfora da escada" } },
+    { "id": "evt-03", "type": "annotation.created", "v": 1, "lc": 3, "ts": "2026-11-10T10:06:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a2", "book_id": "b1", "loc": { "chapter": 1, "para": 2 }, "quote": "Primeiro capítulo" } },
+    { "id": "evt-04", "type": "annotation.created", "v": 1, "lc": 4, "ts": "2026-11-10T10:07:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a3", "book_id": "b1", "loc": { "chapter": 3, "para": 4 }, "quote": "antes no mesmo capítulo", "text": "será apagada" } },
+    { "id": "evt-05", "type": "annotation.created", "v": 1, "lc": 4, "ts": "2026-11-10T10:08:00Z", "device": "dev-b",
+      "payload": { "annotation_id": "a4", "book_id": "b9", "loc": { "chapter": 1, "para": 1 }, "quote": "livro que não existe" } },
+    { "id": "evt-06", "type": "annotation.created", "v": 1, "lc": 5, "ts": "2026-11-10T10:09:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a5", "book_id": "b1", "loc": { "chapter": 0, "para": 1 }, "quote": "capítulo zero" } },
+    { "id": "evt-07", "type": "annotation.created", "v": 1, "lc": 5, "ts": "2026-11-10T10:10:00Z", "device": "dev-b",
+      "payload": { "annotation_id": "a6", "book_id": "b1", "loc": { "chapter": 2, "para": 1 }, "quote": "   " } },
+    { "id": "evt-08", "type": "annotation.created", "v": 1, "lc": 5, "ts": "2026-11-10T10:11:00Z", "device": "dev-c",
+      "payload": { "annotation_id": "a8", "book_id": "b1", "loc": { "chapter": 2, "para": 1.5 }, "quote": "parágrafo fracionário" } },
+    { "id": "evt-09", "type": "annotation.created", "v": 1, "lc": 6, "ts": "2026-11-10T10:12:00Z", "device": "dev-b",
+      "payload": { "annotation_id": "a1", "book_id": "b1", "loc": { "chapter": 9, "para": 9 }, "quote": "outra" } },
+    { "id": "evt-10", "type": "annotation.edited", "v": 1, "lc": 7, "ts": "2026-11-10T10:20:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a2", "text": " virou nota " } },
+    { "id": "evt-11", "type": "annotation.edited", "v": 1, "lc": 8, "ts": "2026-11-10T10:25:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a1", "text": "" } },
+    { "id": "evt-12", "type": "annotation.deleted", "v": 1, "lc": 9, "ts": "2026-11-10T10:30:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a3" } },
+    { "id": "evt-13", "type": "annotation.edited", "v": 1, "lc": 10, "ts": "2026-11-10T10:35:00Z", "device": "dev-b",
+      "payload": { "annotation_id": "a3", "text": "depois de apagar" } },
+    { "id": "evt-14", "type": "annotation.created", "v": 1, "lc": 11, "ts": "2026-11-10T10:40:00Z", "device": "dev-a",
+      "payload": { "annotation_id": "a7", "book_id": "b1", "loc": { "chapter": 3, "para": 17 }, "quote": "mesmo parágrafo, depois" } }
+  ],
+  "expected": {
+    "annotations": {
+      "a1": {
+        "book_id": "b1",
+        "loc": { "chapter": 3, "para": 17, "page": "40" },
+        "quote": "CBT is like a ladder.",
+        "text": "",
+        "created_at": "2026-11-10T10:05:00Z",
+        "updated_at": "2026-11-10T10:25:00Z"
+      },
+      "a2": {
+        "loc": { "chapter": 1, "para": 2 },
+        "quote": "Primeiro capítulo",
+        "text": "virou nota",
+        "updated_at": "2026-11-10T10:20:00Z"
+      },
+      "a7": { "text": "", "created_at": "2026-11-10T10:40:00Z" }
+    },
+    "books": {
+      "b1": {
+        "annotations": ["a2", "a1", "a7"],
+        "updated_at": "2026-11-10T10:40:00Z"
+      }
+    },
+    "order": ["b1"]
+  }
+}
